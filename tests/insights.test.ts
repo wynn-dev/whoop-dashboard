@@ -10,6 +10,8 @@ import {
   sleepTiming,
   sportBreakdown,
   standardDeviation,
+  streak,
+  byWeekday,
   trainingLoad,
   weekInReview,
   workoutsThrough,
@@ -220,5 +222,43 @@ describe('training load', () => {
     expect(sports[0].calories).toBeCloseTo(100)
     expect(sportBreakdown(workouts).at(-1)?.sport).toBe('running')
     expect(sportBreakdown(workouts)[0].sport).toBe('weight lifting')
+  })
+})
+
+describe('weekday pattern and streaks', () => {
+  it('averages by weekday starting on Monday', () => {
+    const pattern = byWeekday(
+      [
+        day('2026-09-07', { recovery: 80 }), // Monday
+        day('2026-08-31', { recovery: 60 }), // Monday
+        day('2026-09-06', { recovery: 30 }), // Sunday
+        day('2026-09-05'), // Saturday, unscored
+      ],
+      'recovery',
+    )
+    expect(pattern.map((p) => [p.label, p.count, p.average])).toEqual([
+      ['Mon', 2, 70],
+      ['Tue', 0, null],
+      ['Wed', 0, null],
+      ['Thu', 0, null],
+      ['Fri', 0, null],
+      ['Sat', 0, null],
+      ['Sun', 1, 30],
+    ])
+  })
+  it('counts current and longest runs of consecutive days', () => {
+    const high = (d: DailyStats) => (d.recovery ?? 0) >= 67
+    const days = [
+      day('2026-09-01', { recovery: 70 }),
+      day('2026-09-02', { recovery: 70 }),
+      day('2026-09-03', { recovery: 70 }),
+      day('2026-09-04', { recovery: 20 }),
+      day('2026-09-06', { recovery: 70 }),
+      day('2026-09-07', { recovery: 70 }),
+    ]
+    expect(streak(days, '2026-09-07', high)).toEqual({ current: 2, longest: 3 })
+    expect(streak(days, '2026-09-04', high).current).toBe(0)
+    // A gap on Sep 5 breaks a run even though Sep 6 and 7 qualify.
+    expect(streak(days, '2026-09-06', high).current).toBe(1)
   })
 })

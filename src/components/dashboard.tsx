@@ -67,10 +67,11 @@ import { SleepDetails } from './sleep-details'
 import { DailyHeartRate, WorkoutDetails } from './workout-details'
 import {
   RecoveryDrivers,
-  RecoveryMix,
+  RecoveryHeatmap,
   SleepTiming,
   SportBreakdown,
   TrainingLoad,
+  WeekdayPattern,
   WeekReview,
 } from './insights'
 import { cn } from '@/lib/utils'
@@ -95,7 +96,7 @@ const authErrors: Record<string, string> = {
   access_denied:
     'WHOOP access wasn’t granted. You can try connecting again when you’re ready.',
   account_not_allowed:
-    'Please sign in with the WHOOP account configured for this personal dashboard.',
+    'This dashboard is private to one WHOOP account, and that isn’t the account you signed in with. Nothing was stored.',
   missing_refresh_token:
     'WHOOP did not return a refresh token. Check that the offline scope is enabled in your app’s OAuth configuration.',
   connection_failed:
@@ -753,6 +754,20 @@ export function Dashboard() {
                         />
                       </div>
                       <div className="grid-secondary">
+                        <WeekdayPattern
+                          days={days}
+                          current={current}
+                          metric="recovery"
+                          range={range}
+                        />
+                        <WeekdayPattern
+                          days={days}
+                          current={current}
+                          metric="strain"
+                          range={range}
+                        />
+                      </div>
+                      <div className="grid-secondary">
                         <section className="panel">
                           <PanelHeading
                             title="Heart rate variability"
@@ -775,11 +790,17 @@ export function Dashboard() {
                         <NightPanel day={current} />
                         <SleepBreakdownPanel days={days} />
                       </div>
-                      <div className="grid-secondary single">
+                      <div className="grid-secondary">
                         <SleepTiming
                           days={days}
                           current={current}
                           end={periodEnd}
+                          range={range}
+                        />
+                        <WeekdayPattern
+                          days={days}
+                          current={current}
+                          metric="sleepHours"
                           range={range}
                         />
                       </div>
@@ -814,7 +835,13 @@ export function Dashboard() {
                     <>
                       <div className="grid-secondary">
                         <WeekReview allDays={allDays} end={periodEnd} />
-                        <RecoveryMix days={days} range={range} />
+                        <RecoveryHeatmap
+                          days={days}
+                          current={current}
+                          end={periodEnd}
+                          range={range}
+                          onSelect={setSelectedDate}
+                        />
                       </div>
                       <div className="grid-secondary">
                         <SleepBreakdownPanel days={days} />
@@ -849,11 +876,8 @@ export function Dashboard() {
 function Welcome({ onPreview }: { onPreview: () => void }) {
   return (
     <section className="welcome">
-      <h1>See your body’s signals clearly.</h1>
-      <p>
-        FORM syncs the last 90 days of recovery, sleep, and strain from your
-        WHOOP account and keeps them private to you.
-      </p>
+      <h1>Your WHOOP data, kept to yourself.</h1>
+      <p>Recovery, sleep, and strain for one account. Nothing else.</p>
       <div className="welcome-actions">
         <Button asChild size="lg" className="btn-primary">
           <a href="/api/auth/whoop">
@@ -865,23 +889,9 @@ function Welcome({ onPreview }: { onPreview: () => void }) {
         </button>
       </div>
       <p className="welcome-trust">
-        <ShieldCheck size={15} aria-hidden />
-        Read-only access. Stored only for your account. Disconnect any time.
+        <ShieldCheck size={14} aria-hidden />
+        Read-only access. Private to one WHOOP account.
       </p>
-      <dl className="welcome-list">
-        <div>
-          <dt>Recovery</dt>
-          <dd>Score, HRV, and resting heart rate against your own baseline.</dd>
-        </div>
-        <div>
-          <dt>Sleep</dt>
-          <dd>Stages, sleep need, and consistency, night by night.</dd>
-        </div>
-        <div>
-          <dt>Strain</dt>
-          <dd>Daily load and every workout, in context.</dd>
-        </div>
-      </dl>
     </section>
   )
 }

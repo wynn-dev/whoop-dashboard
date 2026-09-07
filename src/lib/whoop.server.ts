@@ -5,6 +5,7 @@ import { db, getConnection, type ConnectionRow } from './db.server'
 import { env } from './env.server'
 import { encryptToken, decryptToken } from './crypto.server'
 import type { RecordKind, WhoopRecord } from './whoop'
+import { isAllowedEmail } from './allowlist'
 
 const API = 'https://api.prod.whoop.com/developer/v2'
 const TOKEN_URL = 'https://api.prod.whoop.com/oauth/oauth2/token'
@@ -66,10 +67,8 @@ export async function connectWhoop(code: string) {
   })
   if (!response.ok) throw new WhoopError('profile_unavailable')
   const profile = profileSchema.parse(await response.json())
-  if (
-    profile.email.trim().toLowerCase() !==
-    config.WHOOP_ALLOWED_EMAIL.trim().toLowerCase()
-  )
+  // Reject before anything is stored. The tokens obtained above are dropped.
+  if (!isAllowedEmail(profile.email, config.WHOOP_ALLOWED_EMAIL))
     throw new WhoopError('account_not_allowed', 403)
   const userId = String(profile.user_id)
   await db()`insert into whoop_dashboard.connections
