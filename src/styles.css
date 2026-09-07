@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import './health.css';
+@import './insights.css';
 
 @custom-variant dark (&:is(.dark *));
 

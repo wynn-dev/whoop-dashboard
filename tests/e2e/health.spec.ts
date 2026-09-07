@@ -101,11 +101,9 @@ test('sleep and activity details preserve the calendar and follow the selected d
   await expect(selected.getByText('99.6%', { exact: true })).toBeVisible()
   await expect(selected.getByText('48 m', { exact: true })).toBeVisible()
   await expect(selected.getByText('−7 m', { exact: true })).toBeVisible()
-  const history = page
-    .locator('.panel')
-    .filter({
-      has: page.getByRole('heading', { name: 'Activities', exact: true }),
-    })
+  const history = page.locator('.panel').filter({
+    has: page.getByRole('heading', { name: 'Activities', exact: true }),
+  })
   await expect(history.locator('.workout')).toHaveCount(6)
   await history.getByRole('button', { name: 'Show 6 more' }).click()
   await expect(history.locator('.workout')).toHaveCount(12)
