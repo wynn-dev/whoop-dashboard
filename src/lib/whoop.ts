@@ -28,6 +28,9 @@ export interface WhoopRecord {
     sleep_consistency_percentage?: number
     respiratory_rate?: number
     distance_meter?: number
+    altitude_gain_meter?: number
+    altitude_change_meter?: number
+    percent_recorded?: number
     stage_summary?: {
       total_in_bed_time_milli?: number
       total_awake_time_milli?: number
@@ -36,6 +39,7 @@ export interface WhoopRecord {
       total_slow_wave_sleep_time_milli?: number
       total_rem_sleep_time_milli?: number
       disturbance_count?: number
+      sleep_cycle_count?: number
     }
     sleep_needed?: {
       baseline_milli?: number
@@ -84,6 +88,18 @@ export interface DailyStats {
   sleepStart: string | null
   sleepEnd: string | null
   timezoneOffset: string
+  recoveryCalibrating: boolean
+  sleepState: string
+  sleepBaselineHours: number | null
+  sleepDebtHours: number | null
+  sleepStrainHours: number | null
+  sleepNapCreditHours: number | null
+  inBedHours: number | null
+  noDataHours: number | null
+  disturbanceCount: number | null
+  sleepCycleCount: number | null
+  averageHeartRate: number | null
+  maxHeartRate: number | null
 }
 
 const numeric = (value: unknown): number | null =>
@@ -134,14 +150,18 @@ export function buildDailyStats(records: StoredRecord[]): DailyStats[] {
     .filter((r) => r.kind === 'cycle' && r.data.start)
     .map(({ data: cycle }) => {
       const recovery = recoveries.get(String(cycle.id))
-      const sleep = recovery?.sleep_id
+      const linkedSleep = recovery?.sleep_id
         ? sleeps.get(recovery.sleep_id)
-        : records.find(
-            (r) =>
-              r.kind === 'sleep' &&
-              !r.data.nap &&
-              String(r.data.cycle_id) === String(cycle.id),
-          )?.data
+        : undefined
+      const sleep =
+        linkedSleep && !linkedSleep.nap
+          ? linkedSleep
+          : records.find(
+              (r) =>
+                r.kind === 'sleep' &&
+                !r.data.nap &&
+                String(r.data.cycle_id) === String(cycle.id),
+            )?.data
       const r = recovery?.score_state === 'SCORED' ? recovery.score : null
       const s = sleep?.score_state === 'SCORED' ? sleep.score : null
       const c = cycle.score_state === 'SCORED' ? cycle.score : null
@@ -186,6 +206,18 @@ export function buildDailyStats(records: StoredRecord[]): DailyStats[] {
         respiratoryRate: numeric(s?.respiratory_rate),
         calories: numeric(c?.kilojoule) === null ? null : c!.kilojoule! / 4.184,
         recoveryState: recovery?.score_state ?? 'PENDING_SCORE',
+        recoveryCalibrating: r?.user_calibrating === true,
+        sleepState: sleep?.score_state ?? 'PENDING_SCORE',
+        sleepBaselineHours: hours(needed?.baseline_milli),
+        sleepDebtHours: hours(needed?.need_from_sleep_debt_milli),
+        sleepStrainHours: hours(needed?.need_from_recent_strain_milli),
+        sleepNapCreditHours: hours(needed?.need_from_recent_nap_milli),
+        inBedHours: hours(stages?.total_in_bed_time_milli),
+        noDataHours: hours(stages?.total_no_data_time_milli),
+        disturbanceCount: numeric(stages?.disturbance_count),
+        sleepCycleCount: numeric(stages?.sleep_cycle_count),
+        averageHeartRate: numeric(c?.average_heart_rate),
+        maxHeartRate: numeric(c?.max_heart_rate),
         sleepStart: sleep?.start ?? null,
         sleepEnd: sleep?.end ?? null,
         timezoneOffset: cycle.timezone_offset ?? '+00:00',
@@ -211,4 +243,69 @@ export function duration(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return '—'
   const minutes = Math.round(value * 60)
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
+}
+
+export function shiftDate(date: string, amount: number) {
+  const shifted = new Date(`${date}T12:00:00Z`)
+  shifted.setUTCDate(shifted.getUTCDate() + amount)
+  return shifted.toISOString().slice(0, 10)
+}
+
+export function daysThrough(days: DailyStats[], end: string, count: number) {
+  const start = shiftDate(end, 1 - count)
+  return days.filter((day) => day.date >= start && day.date <= end)
+}
+
+export function sleepDuration(record: WhoopRecord) {
+  if (record.score_state !== 'SCORED') return null
+  const stages = record.score?.stage_summary
+  const values = [
+    stages?.total_light_sleep_time_milli,
+    stages?.total_slow_wave_sleep_time_milli,
+    stages?.total_rem_sleep_time_milli,
+  ]
+  return values.every((value) => numeric(value) !== null)
+    ? (values as number[]).reduce((sum, value) => sum + value, 0) / 3_600_000
+    : null
+}
+
+export function napsOnDate(records: StoredRecord[], date: string) {
+  return records
+    .filter(
+      ({ kind, data }) =>
+        kind === 'sleep' &&
+        data.nap &&
+        (data.end || data.start) &&
+        localDate((data.end ?? data.start)!, data.timezone_offset) === date,
+    )
+    .map(({ data }) => data)
+    .sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))
+}
+
+export function workoutZones(workout: WhoopRecord) {
+  const names = ['zero', 'one', 'two', 'three', 'four', 'five']
+  const labels = [
+    'Very light',
+    'Light',
+    'Moderate',
+    'Hard',
+    'Very hard',
+    'Maximum',
+  ]
+  const raw =
+    workout.score_state === 'SCORED' ? workout.score?.zone_durations : undefined
+  const zones = names.map((name, index) => {
+    const value = numeric(raw?.[`zone_${name}_milli`])
+    return {
+      index,
+      label: labels[index],
+      milliseconds: value !== null && value >= 0 ? value : null,
+    }
+  })
+  const total = zones.reduce((sum, zone) => sum + (zone.milliseconds ?? 0), 0)
+  return {
+    total,
+    zones,
+    complete: zones.every((zone) => zone.milliseconds !== null),
+  }
 }
