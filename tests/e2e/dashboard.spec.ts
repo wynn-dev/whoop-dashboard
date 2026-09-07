@@ -18,6 +18,22 @@ test('private routes reject unauthenticated and cross-origin requests', async ({
       })
     ).status(),
   ).toBe(403)
+  // The MCP endpoint refuses everything without a valid bearer token, and
+  // refuses everything when no token is configured at all.
+  const mcp = await request.post('/api/mcp', {
+    headers: { 'Content-Type': 'application/json' },
+    data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+  })
+  expect([401, 503]).toContain(mcp.status())
+  expect(mcp.headers()['cache-control']).toBe('no-store')
+  const forged = await request.post('/api/mcp', {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer definitely-not-the-token-0000000000000000',
+    },
+    data: { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+  })
+  expect([401, 503]).toContain(forged.status())
   const invalidCallback = await request.get(
     '/api/auth/whoop/callback?code=invalid&state=forged',
     { maxRedirects: 0 },

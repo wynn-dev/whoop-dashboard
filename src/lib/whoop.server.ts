@@ -4,7 +4,7 @@ import type postgres from 'postgres'
 import { db, getConnection, type ConnectionRow } from './db.server'
 import { env } from './env.server'
 import { encryptToken, decryptToken } from './crypto.server'
-import type { RecordKind, WhoopRecord } from './whoop'
+import type { RecordKind, StoredRecord, WhoopRecord } from './whoop'
 import { isAllowedEmail } from './allowlist'
 
 const API = 'https://api.prod.whoop.com/developer/v2'
@@ -265,6 +265,6 @@ export async function dashboardData(userId: string) {
       Date.now() - connection.sync_started_at.getTime() < 600_000,
     syncError: connection.sync_error,
     needsReconnect: connection.needs_reconnect,
-    records,
+    records: records as unknown as StoredRecord[],
   }
 }

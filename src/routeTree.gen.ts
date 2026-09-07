@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiDashboardRouteImport } from './routes/api.dashboard'
+import { Route as ApiMcpRouteImport } from './routes/api.mcp'
 import { Route as ApiSyncRouteImport } from './routes/api.sync'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api.auth.logout'
 import { Route as ApiAuthWhoopRouteImport } from './routes/api.auth.whoop'
@@ -24,6 +25,11 @@ const IndexRoute = IndexRouteImport.update({
 const ApiDashboardRoute = ApiDashboardRouteImport.update({
   id: '/api/dashboard',
   path: '/api/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSyncRoute = ApiSyncRouteImport.update({
@@ -50,6 +56,7 @@ const ApiAuthWhoopCallbackRoute = ApiAuthWhoopCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/dashboard': typeof ApiDashboardRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/whoop': typeof ApiAuthWhoopRouteWithChildren
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/dashboard': typeof ApiDashboardRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/whoop': typeof ApiAuthWhoopRouteWithChildren
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/dashboard': typeof ApiDashboardRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/sync': typeof ApiSyncRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/whoop': typeof ApiAuthWhoopRouteWithChildren
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/api/dashboard'
+    | '/api/mcp'
     | '/api/sync'
     | '/api/auth/logout'
     | '/api/auth/whoop'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/api/dashboard'
+    | '/api/mcp'
     | '/api/sync'
     | '/api/auth/logout'
     | '/api/auth/whoop'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/api/dashboard'
+    | '/api/mcp'
     | '/api/sync'
     | '/api/auth/logout'
     | '/api/auth/whoop'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiDashboardRoute: typeof ApiDashboardRoute
+  ApiMcpRoute: typeof ApiMcpRoute
   ApiSyncRoute: typeof ApiSyncRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthWhoopRoute: typeof ApiAuthWhoopRouteWithChildren
@@ -121,6 +134,13 @@ declare module '@tanstack/react-router' {
       path: '/api/dashboard'
       fullPath: '/api/dashboard'
       preLoaderRoute: typeof ApiDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sync': {
@@ -169,6 +189,7 @@ const ApiAuthWhoopRouteWithChildren = ApiAuthWhoopRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiDashboardRoute: ApiDashboardRoute,
+  ApiMcpRoute: ApiMcpRoute,
   ApiSyncRoute: ApiSyncRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthWhoopRoute: ApiAuthWhoopRouteWithChildren,
