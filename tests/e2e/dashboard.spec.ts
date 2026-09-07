@@ -47,16 +47,16 @@ test('demo charts, date ranges, navigation, and daily values work on desktop', a
   await page.setViewportSize({ width: 1440, height: 1100 })
   await page.goto('/')
   await expect(
-    page.getByRole('heading', { name: /Know your body/ }),
+    page.getByRole('heading', { name: /signals clearly/ }),
   ).toBeVisible()
   await page.screenshot({
     path: 'artifacts/welcome-desktop.png',
     fullPage: true,
   })
-  await page.getByRole('button', { name: 'Explore a demo' }).click()
-  await expect(page.getByText('DEMO DATA', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Explore the demo' }).click()
+  await expect(page.getByText('Demo data', { exact: true })).toBeVisible()
   await expect(
-    page.getByRole('heading', { name: 'Recovery trend', exact: true }),
+    page.getByRole('heading', { name: 'Recovery', exact: true }),
   ).toBeVisible()
   await expect(page.locator('.primary-trend svg path').first()).toBeVisible()
   await page.getByRole('tab', { name: '7 days', exact: true }).click()
@@ -69,9 +69,29 @@ test('demo charts, date ranges, navigation, and daily values work on desktop', a
     page.getByRole('combobox', { name: 'Select physiological day' }),
   ).not.toHaveValue(selected)
   await page.getByRole('button', { name: 'Next day', exact: true }).click()
+  await expect(
+    page.getByRole('combobox', { name: 'Select physiological day' }),
+  ).toHaveValue(selected)
+  await page.keyboard.press('ArrowLeft')
+  await expect(
+    page.getByRole('combobox', { name: 'Select physiological day' }),
+  ).not.toHaveValue(selected)
+  await expect(page.getByRole('button', { name: 'Latest' })).toBeVisible()
+  await page.getByRole('button', { name: 'Latest' }).click()
+  await expect(page.getByText('Today', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Sleep', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Sleep quality', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Last night', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('meter', { name: 'Sleep need met' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Activity', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Daily strain', exact: true }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Recovery', exact: true }).click()
   await expect(
@@ -106,8 +126,8 @@ test('demo charts, date ranges, navigation, and daily values work on desktop', a
 test('mobile layout fits without horizontal scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await page.getByRole('button', { name: 'Explore a demo' }).click()
-  await expect(page.getByText('DEMO DATA', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Explore the demo' }).click()
+  await expect(page.getByText('Demo data', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Sleep', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Sleep quality', exact: true }),

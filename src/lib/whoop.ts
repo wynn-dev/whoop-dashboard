@@ -104,6 +104,21 @@ export function localDate(iso: string, offset = '+00:00'): string {
     .slice(0, 10)
 }
 
+// Wall-clock time in the recorded timezone, e.g. "11:42 PM".
+export function localTime(iso: string, offset = '+00:00'): string {
+  const match = /^([+-])(\d{2}):(\d{2})$/.exec(offset)
+  const minutes = match
+    ? (Number(match[2]) * 60 + Number(match[3])) * (match[1] === '-' ? -1 : 1)
+    : 0
+  return new Date(
+    new Date(iso).getTime() + minutes * 60_000,
+  ).toLocaleTimeString('en', {
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'UTC',
+  })
+}
+
 export function buildDailyStats(records: StoredRecord[]): DailyStats[] {
   const recoveries = new Map(
     records
@@ -196,14 +211,4 @@ export function duration(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return '—'
   const minutes = Math.round(value * 60)
   return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
-}
-
-export function recoveryColor(score: number | null) {
-  return score === null
-    ? '#969c8d'
-    : score >= 67
-      ? '#d4ed85'
-      : score >= 34
-        ? '#ebc574'
-        : '#ed9688'
 }

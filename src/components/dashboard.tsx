@@ -2,35 +2,27 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Activity,
-  ArrowDownRight,
   ArrowRight,
-  ArrowUpRight,
   Bike,
-  CalendarDays,
-  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
   Dumbbell,
-  ExternalLink,
   Footprints,
-  Heart,
   HeartPulse,
-  LayoutDashboard,
+  LayoutGrid,
   LoaderCircle,
   LogOut,
   Moon,
+  MoveDownRight,
+  MoveUpRight,
   RefreshCw,
   ShieldCheck,
-  Sparkles,
-  Waves,
   X,
-  Zap,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   DropdownMenu,
@@ -46,27 +38,41 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { Skeleton } from '@/components/ui/skeleton'
-import { MetricRing, SleepChart, TrendChart } from './performance-charts'
+import {
+  MetricRing,
+  SleepChart,
+  SleepStagesBar,
+  TrendChart,
+  trendMetrics,
+  type TrendMetric,
+} from './performance-charts'
 import {
   buildDailyStats,
   duration,
   localDate,
+  localTime,
   mean,
-  recoveryColor,
   type DailyStats,
   type DashboardData,
   type WhoopRecord,
 } from '@/lib/whoop'
+import { palette, recoveryTone } from '@/lib/palette'
 import { demoDashboard } from '@/lib/demo'
 import { cn } from '@/lib/utils'
 
 type Section = 'overview' | 'recovery' | 'sleep' | 'activity'
 const sections: { id: Section; label: string; icon: LucideIcon }[] = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'recovery', label: 'Recovery', icon: HeartPulse },
   { id: 'sleep', label: 'Sleep', icon: Moon },
-  { id: 'activity', label: 'Activities', icon: Activity },
+  { id: 'activity', label: 'Activity', icon: Activity },
 ]
+const primaryMetric: Record<Section, TrendMetric> = {
+  overview: 'recovery',
+  recovery: 'recovery',
+  sleep: 'sleepHours',
+  activity: 'strain',
+}
 const authErrors: Record<string, string> = {
   invalid_state: 'Your connection request expired. Please connect again.',
   access_denied:
@@ -97,6 +103,8 @@ const dateLabel = (
   date: string,
   options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' },
 ) => new Date(`${date}T12:00:00`).toLocaleDateString('en', options)
+const clock = (iso: string) =>
+  new Date(iso).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })
 
 export function Dashboard() {
   const [section, setSection] = useState<Section>('overview')
@@ -104,7 +112,6 @@ export function Dashboard() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [preview, setPreview] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
-  const [showAllWorkouts, setShowAllWorkouts] = useState(false)
   const demo = useMemo(demoDashboard, [])
   const queryClient = useQueryClient()
   const query = useQuery({
@@ -186,6 +193,13 @@ export function Dashboard() {
   const currentIndex = current
     ? allDays.findIndex((day) => day.cycleId === current.cycleId)
     : -1
+  const canStep = (delta: -1 | 1) =>
+    currentIndex >= 0 &&
+    currentIndex + delta >= 0 &&
+    currentIndex + delta < allDays.length
+  const step = (delta: -1 | 1) => {
+    if (canStep(delta)) setSelectedDate(allDays[currentIndex + delta].cycleId)
+  }
   const syncing = sync.isPending || !!data?.syncing
   const workouts = (data?.records ?? [])
     .filter(
@@ -196,852 +210,636 @@ export function Dashboard() {
     )
     .map((r) => r.data)
     .sort((a, b) => (b.start ?? '').localeCompare(a.start ?? ''))
+  const todaysWorkouts = current
+    ? workouts.filter(
+        (w) => localDate(w.start!, w.timezone_offset) === current.date,
+      )
+    : []
+  const todayDate = localDate(new Date().toISOString(), current?.timezoneOffset)
+  const relativeDay =
+    current?.date === todayDate
+      ? 'Today'
+      : current?.date ===
+          localDate(
+            new Date(Date.now() - 86_400_000).toISOString(),
+            current?.timezoneOffset,
+          )
+        ? 'Yesterday'
+        : null
+
+  // Arrow keys step through days when focus is not inside a control.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (
+        target?.closest(
+          'input, select, textarea, [contenteditable], [role="tablist"], [role="menu"]',
+        )
+      )
+        return
+      if (event.key === 'ArrowLeft') step(-1)
+      if (event.key === 'ArrowRight') step(1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  const metric = primaryMetric[section]
+  const metricAverage = mean(days.map((d) => d[metric]))
+  const tone = recoveryTone(current?.recovery)
+  const account = data && !preview && (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="avatar" aria-label="Account menu">
+          {data.user.firstName[0]}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="menu">
+        <DropdownMenuLabel>
+          <span className="menu-name">
+            {data.user.firstName} {data.user.lastName}
+          </span>
+          <span className="menu-email">{data.user.email}</span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <a href="/api/auth/whoop">
+            <RefreshCw /> Reconnect WHOOP
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => logout.mutate()}
+          disabled={logout.isPending}
+        >
+          <LogOut /> Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className="app">
+      <header className="topbar">
         <a className="brand" href="/" aria-label="FORM home">
-          <Waves size={28} strokeWidth={2.7} />
-          <span>
-            FORM<span className="brand-dot">.</span>
-          </span>
+          FORM
         </a>
-        <div className="workspace-label">YOUR DAILY EDGE</div>
-        <div className="sidebar-label">WORKSPACE</div>
-        <nav className="sidebar-nav" aria-label="Main navigation">
-          {sections.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              aria-label={label}
-              className={cn('nav-item', section === id && 'active')}
-              onClick={() => {
-                setSection(id)
-                setShowAllWorkouts(false)
-              }}
-              aria-current={section === id ? 'page' : undefined}
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-              {section === id && <span className="nav-dot" />}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="connection-card">
-            <span className="connection-symbol">
-              <Activity size={17} />
-            </span>
-            <div>
-              <strong>Powered by WHOOP</strong>
-              <span>
-                {preview
-                  ? 'Preview mode'
-                  : data
-                    ? 'Account connected'
-                    : 'Connect your account'}
-              </span>
-            </div>
-            <span className={cn('status-dot', data && !preview && 'online')} />
-          </div>
-          <a
-            href="https://support.whoop.com"
-            target="_blank"
-            rel="noreferrer"
-            className="help-link"
-          >
-            <CircleHelp size={16} /> Help & resources <ExternalLink size={13} />
-          </a>
-          <div className="profile">
-            <div className="avatar">
-              {data ? data.user.firstName[0] : <Activity size={19} />}
-            </div>
-            <div>
-              <strong>
-                {data
-                  ? `${data.user.firstName} ${data.user.lastName}`
-                  : 'Your personal space'}
-              </strong>
-              <span>
-                {preview
-                  ? 'Demo profile'
-                  : data
-                    ? 'Personal dashboard'
-                    : 'Built around you'}
-              </span>
-            </div>
-            {data && !preview && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost" aria-label="Account menu">
-                    <ChevronDown size={16} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>{data.user.email}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <a href="/api/auth/whoop">
-                      <RefreshCw /> Reconnect WHOOP
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={() => logout.mutate()}
-                    disabled={logout.isPending}
-                  >
-                    <LogOut /> Sign out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        </div>
-      </aside>
-
-      <div className="main-shell">
-        <header className="topbar">
-          <div className="breadcrumb">
-            Workspace <span>/</span>{' '}
-            <strong>{sections.find((s) => s.id === section)?.label}</strong>
-          </div>
-          <div className="topbar-right">
-            <span className="private-label">
-              <ShieldCheck size={14} /> Private workspace
-            </span>
-            {preview ? (
-              <Badge variant="outline" className="demo-badge">
-                DEMO DATA
-              </Badge>
-            ) : (
-              <span className="live-status">
-                <span className={cn('status-dot', data && 'online')} />
-                {data ? 'WHOOP connected' : 'Not connected'}
-              </span>
-            )}
-            {data && !preview && (
-              <div className="mobile-account">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Account menu"
-                    >
-                      <ChevronDown size={15} />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>{data.user.email}</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <a href="/api/auth/whoop">
-                        <RefreshCw /> Reconnect WHOOP
-                      </a>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => logout.mutate()}
-                      disabled={logout.isPending}
-                    >
-                      <LogOut /> Sign out
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            )}
-          </div>
-        </header>
-        <main className="main-content">
-          {preview && (
-            <div className="preview-banner">
-              <span>
-                <Sparkles size={15} /> You’re exploring a demo. Connect WHOOP to
-                see your own stats.
-              </span>
-              <button onClick={() => setPreview(false)} aria-label="Exit demo">
-                <X size={17} />
-              </button>
-            </div>
-          )}
-          {(authError || query.error || logout.error) && (
-            <div role="alert" className="error-banner">
-              <span>
-                {authError || query.error?.message || logout.error?.message}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setAuthError(null)
-                  void query.refetch()
-                  logout.reset()
-                }}
+        {data && (
+          <nav className="nav" aria-label="Sections">
+            {sections.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                className="nav-item"
+                onClick={() => setSection(id)}
+                aria-current={section === id ? 'page' : undefined}
               >
-                Try again
-              </Button>
-            </div>
-          )}
-          {query.isPending && !preview ? (
-            <LoadingDashboard />
-          ) : !data ? (
-            <Welcome onPreview={() => setPreview(true)} />
-          ) : (
-            <>
-              <div className="page-heading">
-                <div>
-                  <p className="eyebrow">A LITTLE MORE IN TUNE WITH YOU</p>
-                  <h1>
-                    {section === 'overview'
-                      ? `Your daily overview${preview ? '' : `, ${data.user.firstName}`}`
-                      : section === 'recovery'
-                        ? 'Ready for what’s next.'
-                        : section === 'sleep'
-                          ? 'Better days start at night.'
-                          : 'Make every move count.'}
-                  </h1>
-                  <p className="page-subtitle">
-                    {section === 'overview'
-                      ? 'Your recovery, rest, and effort. All in one place.'
-                      : section === 'recovery'
-                        ? 'A closer look at your recovery and the signals behind it.'
-                        : section === 'sleep'
-                          ? 'Understand your sleep, from consistency to the restorative stages.'
-                          : 'A record of your effort, one session at a time.'}
-                  </p>
-                </div>
-                <div className="heading-actions">
-                  {preview ? (
-                    <Button asChild className="connect-button">
-                      <a href="/api/auth/whoop">
-                        Connect WHOOP <ArrowRight size={15} />
-                      </a>
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
+                <Icon size={18} strokeWidth={1.75} aria-hidden />
+                <span>{label}</span>
+              </button>
+            ))}
+          </nav>
+        )}
+        <div className="topbar-right">
+          {data &&
+            (preview ? (
+              <span className="pill">Demo data</span>
+            ) : (
+              <div className="sync">
+                <span className="sync-label">
+                  {syncing
+                    ? 'Syncing…'
+                    : data.syncedAt
+                      ? `Synced ${clock(data.syncedAt)}`
+                      : 'Not synced yet'}
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className="icon-btn"
+                      aria-label="Sync now"
                       onClick={() => sync.mutate()}
                       disabled={syncing || data.needsReconnect}
                     >
                       <RefreshCw
-                        className={syncing ? 'animate-spin' : ''}
-                        size={14}
+                        size={16}
+                        className={syncing ? 'animate-spin' : undefined}
                       />
-                      {syncing ? 'Syncing…' : 'Sync now'}
-                    </Button>
-                  )}
-                </div>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Sync now</TooltipContent>
+                </Tooltip>
               </div>
-              {(sync.error || data.syncError) && (
-                <div className="error-banner" role="alert">
-                  <span>
-                    {sync.error?.message ??
-                      (data.needsReconnect
-                        ? 'Please renew your WHOOP connection to keep syncing.'
-                        : 'Your last sync didn’t finish. Previously synced data is still available.')}
-                  </span>
-                  {data.needsReconnect && (
-                    <Button asChild size="sm">
-                      <a href="/api/auth/whoop">Reconnect WHOOP</a>
-                    </Button>
-                  )}
-                </div>
-              )}
-              {!latest && (
-                <div className="sync-banner">
+            ))}
+          {account}
+        </div>
+      </header>
+
+      <main className="content">
+        {preview && (
+          <div className="notice">
+            <span>
+              You’re viewing demo data. Connect WHOOP to see your own.
+            </span>
+            <span className="notice-actions">
+              <Button asChild size="sm" className="btn-primary">
+                <a href="/api/auth/whoop">Connect WHOOP</a>
+              </Button>
+              <button
+                className="icon-btn"
+                onClick={() => setPreview(false)}
+                aria-label="Exit demo"
+              >
+                <X size={16} />
+              </button>
+            </span>
+          </div>
+        )}
+        {(authError || query.error || logout.error) && (
+          <div role="alert" className="notice error">
+            <span>
+              {authError || query.error?.message || logout.error?.message}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setAuthError(null)
+                void query.refetch()
+                logout.reset()
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        )}
+        {query.isPending && !preview ? (
+          <LoadingDashboard />
+        ) : !data ? (
+          <Welcome onPreview={() => setPreview(true)} />
+        ) : (
+          <>
+            {(sync.error || data.syncError) && (
+              <div className="notice error" role="alert">
+                <span>
+                  {sync.error?.message ??
+                    (data.needsReconnect
+                      ? 'Please renew your WHOOP connection to keep syncing.'
+                      : 'Your last sync didn’t finish. Previously synced data is still available.')}
+                </span>
+                {data.needsReconnect && (
+                  <Button asChild size="sm" className="btn-primary">
+                    <a href="/api/auth/whoop">Reconnect WHOOP</a>
+                  </Button>
+                )}
+              </div>
+            )}
+            {!latest && (
+              <div className="notice">
+                <span className="notice-inline">
                   <LoaderCircle
-                    size={17}
-                    className={syncing ? 'animate-spin' : ''}
+                    size={16}
+                    className={syncing ? 'animate-spin' : undefined}
                   />
-                  <span>
-                    {syncing
-                      ? 'Bringing in your last 90 days. This first sync can take a minute.'
-                      : 'No data synced yet. Use Sync now to bring in your WHOOP stats.'}
-                  </span>
-                </div>
-              )}
-              <div className="date-toolbar">
-                <div className="date-selector">
-                  <CalendarDays size={15} />
-                  <select
-                    aria-label="Select physiological day"
-                    value={current?.cycleId ?? ''}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    disabled={!allDays.length}
-                  >
-                    {!allDays.length && (
-                      <option value="">No recorded days</option>
-                    )}
-                    {[...allDays].reverse().map((day) => (
-                      <option key={day.cycleId} value={day.cycleId}>
-                        {dateLabel(day.date, {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="date-arrows">
-                    <button
-                      aria-label="Previous day"
-                      disabled={currentIndex <= 0}
-                      onClick={() =>
-                        setSelectedDate(allDays[currentIndex - 1].cycleId)
-                      }
-                    >
-                      <ChevronLeft size={15} />
-                    </button>
-                    <button
-                      aria-label="Next day"
-                      disabled={
-                        currentIndex < 0 || currentIndex >= allDays.length - 1
-                      }
-                      onClick={() =>
-                        setSelectedDate(allDays[currentIndex + 1].cycleId)
-                      }
-                    >
-                      <ChevronRight size={15} />
-                    </button>
-                  </div>
-                </div>
-                <span className="updated-label">
-                  {preview
-                    ? 'Sample data · for exploration'
-                    : syncing
-                      ? 'Updating your stats…'
-                      : data.syncedAt
-                        ? `Last synced ${new Date(data.syncedAt).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })}`
-                        : 'Waiting for first sync'}
+                  {syncing
+                    ? 'Bringing in your last 90 days. The first sync can take a minute.'
+                    : 'Nothing synced yet. Use Sync now to bring in your WHOOP data.'}
                 </span>
               </div>
-              <div className="metrics-grid">
-                <MetricCard
-                  title="RECOVERY"
-                  value={format(current?.recovery)}
-                  unit="%"
-                  icon={HeartPulse}
-                  color={recoveryColor(current?.recovery ?? null)}
-                  ringValue={current?.recovery ?? null}
-                  ringMax={100}
-                  note={
-                    current?.recovery == null
-                      ? 'Awaiting a scored recovery'
-                      : current.recovery >= 67
-                        ? 'High recovery'
-                        : current.recovery >= 34
-                          ? 'Moderate recovery'
-                          : 'Low recovery'
-                  }
-                  detail="WHOOP recovery score"
-                  active={section === 'recovery'}
-                  onClick={() => setSection('recovery')}
-                />
-                <MetricCard
-                  title="DAY STRAIN"
-                  value={format(current?.strain, 1)}
-                  unit="/ 21"
-                  icon={Zap}
-                  color="#eeb57d"
-                  ringValue={current?.strain ?? null}
-                  ringMax={21}
-                  note={
-                    current?.calories == null
-                      ? 'Awaiting a scored cycle'
-                      : `${Math.round(current.calories).toLocaleString()} kcal expended`
-                  }
-                  detail="Total effort this cycle"
-                  active={section === 'activity'}
-                  onClick={() => setSection('activity')}
-                />
-                <MetricCard
-                  title="SLEEP PERFORMANCE"
-                  value={format(current?.sleepPerformance)}
-                  unit="%"
-                  icon={Moon}
-                  color="#b7a3de"
-                  ringValue={current?.sleepPerformance ?? null}
-                  ringMax={100}
-                  note={
-                    current?.sleepHours == null
-                      ? 'Awaiting a scored sleep'
-                      : `${duration(current.sleepHours)} of sleep`
-                  }
-                  detail={
-                    current?.sleepNeededHours == null
-                      ? 'Time asleep vs. sleep needed'
-                      : `${duration(current.sleepNeededHours)} needed`
-                  }
-                  active={section === 'sleep'}
-                  onClick={() => setSection('sleep')}
-                />
-              </div>
-              <div className="section-toolbar">
-                <div>
-                  <h2>
-                    Your{' '}
-                    {section === 'overview'
-                      ? 'performance'
-                      : section === 'activity'
-                        ? 'activity'
-                        : section}{' '}
-                    trends
-                  </h2>
-                  <p>A wider view of how you’re doing.</p>
-                </div>
-                <Tabs
-                  value={String(range)}
-                  onValueChange={(value) => setRange(Number(value))}
+            )}
+
+            <div className="day-nav">
+              <button
+                className="icon-btn"
+                aria-label="Previous day"
+                disabled={!canStep(-1)}
+                onClick={() => step(-1)}
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <div className="day-picker">
+                <h1>
+                  {current
+                    ? dateLabel(current.date, {
+                        weekday: 'long',
+                        month: 'long',
+                        day: 'numeric',
+                      })
+                    : 'No days recorded'}
+                </h1>
+                <ChevronDown size={16} aria-hidden />
+                <select
+                  aria-label="Select physiological day"
+                  value={current?.cycleId ?? ''}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  disabled={!allDays.length}
                 >
-                  <TabsList aria-label="Trend date range">
-                    {[7, 30, 90].map((n) => (
-                      <TabsTrigger key={n} value={String(n)}>
-                        {n} days
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-                </Tabs>
+                  {!allDays.length && (
+                    <option value="">No recorded days</option>
+                  )}
+                  {[...allDays].reverse().map((day) => (
+                    <option key={day.cycleId} value={day.cycleId}>
+                      {dateLabel(day.date, {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <div className="trends-grid">
-                <section className="panel primary-trend">
-                  <PanelHeading
-                    title={
-                      section === 'sleep'
-                        ? 'Time asleep'
-                        : section === 'activity'
-                          ? 'Daily strain'
-                          : 'Recovery trend'
-                    }
-                    description={`Last ${range} days`}
-                    tip={
-                      section === 'activity'
-                        ? 'WHOOP strain uses a nonlinear 0–21 scale. Daily strain is not the sum of workout strain.'
-                        : 'Only scored records are shown. Missing values are never treated as zero.'
-                    }
-                  />
-                  <div className="chart-stat">
-                    <strong>
-                      {section === 'sleep'
-                        ? duration(mean(days.map((d) => d.sleepHours)))
-                        : format(
-                            mean(
-                              days.map((d) =>
-                                section === 'activity' ? d.strain : d.recovery,
-                              ),
-                            ),
-                            section === 'activity' ? 1 : 0,
-                          )}
-                    </strong>
-                    <span>
-                      {section === 'sleep'
-                        ? 'average sleep'
-                        : section === 'activity'
-                          ? '/ 21 average strain'
-                          : '% average recovery'}
-                    </span>
-                    <span className="chart-legend">
-                      <i
-                        style={{
-                          background:
-                            section === 'sleep'
-                              ? '#b7a3de'
-                              : section === 'activity'
-                                ? '#eeb57d'
-                                : '#d4ed85',
-                        }}
-                      />
-                      {section === 'sleep'
-                        ? 'Time asleep'
-                        : section === 'activity'
-                          ? 'Day strain'
-                          : 'Recovery'}
-                    </span>
-                  </div>
-                  <TrendChart
-                    days={days}
-                    metric={
-                      section === 'sleep'
-                        ? 'sleepHours'
-                        : section === 'activity'
-                          ? 'strain'
-                          : 'recovery'
-                    }
-                    label={
-                      section === 'sleep'
-                        ? 'Sleep'
-                        : section === 'activity'
-                          ? 'Strain'
-                          : 'Recovery'
-                    }
-                    unit={section === 'activity' ? ' / 21' : '%'}
-                    color={
-                      section === 'sleep'
-                        ? '#b7a3de'
-                        : section === 'activity'
-                          ? '#eeb57d'
-                          : '#d4ed85'
-                    }
-                  />
-                  <div className="panel-footnote">
-                    {days.length} physiological days recorded{' '}
-                    <span>Daily values · WHOOP</span>
-                  </div>
-                </section>
-                <section className="panel health-panel">
-                  <PanelHeading
-                    title={
-                      section === 'sleep' ? 'Sleep quality' : 'Your key signals'
-                    }
-                    description={
-                      current
-                        ? dateLabel(current.date, {
-                            month: 'long',
-                            day: 'numeric',
-                          })
-                        : 'Your selected day'
-                    }
-                    tip="Compare these readings with your own recent baseline. They are measurements, not diagnoses."
-                  />
-                  <div className="signals">
-                    {section === 'sleep' ? (
-                      <>
-                        <Signal
-                          label="Sleep efficiency"
-                          value={current?.sleepEfficiency}
-                          unit="%"
-                          icon={Moon}
-                          baseline={mean(days.map((d) => d.sleepEfficiency))}
-                        />
-                        <Signal
-                          label="Sleep consistency"
-                          value={current?.sleepConsistency}
-                          unit="%"
-                          icon={CalendarDays}
-                          baseline={mean(days.map((d) => d.sleepConsistency))}
-                        />
-                        <Signal
-                          label="Respiratory rate"
-                          value={current?.respiratoryRate}
-                          unit="rpm"
-                          icon={Waves}
-                          baseline={mean(days.map((d) => d.respiratoryRate))}
-                          decimals={1}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <Signal
-                          label="Heart rate variability"
-                          value={current?.hrv}
-                          unit="ms"
-                          icon={HeartPulse}
-                          baseline={mean(days.map((d) => d.hrv))}
-                        />
-                        <Signal
-                          label="Resting heart rate"
-                          value={current?.rhr}
-                          unit="bpm"
-                          icon={Heart}
-                          baseline={mean(days.map((d) => d.rhr))}
-                        />
-                        <Signal
-                          label="Respiratory rate"
-                          value={current?.respiratoryRate}
-                          unit="rpm"
-                          icon={Waves}
-                          baseline={mean(days.map((d) => d.respiratoryRate))}
-                          decimals={1}
-                        />
-                      </>
-                    )}
-                  </div>
-                  <div className="baseline-note">
-                    <span className="status-dot online" />
-                    Compared with your {range}-day average
-                  </div>
-                </section>
-              </div>
-              {section === 'recovery' ? (
-                <div className="secondary-grid">
-                  <section className="panel">
-                    <PanelHeading
-                      title="Heart rate variability"
-                      description="The rhythm behind your recovery"
-                    />
-                    <TrendChart
-                      days={days}
-                      metric="hrv"
-                      label="HRV"
-                      unit=" ms"
-                      color="#92cddd"
-                    />
-                  </section>
-                  <section className="panel">
-                    <PanelHeading
-                      title="Resting heart rate"
-                      description="Your heart at rest"
-                    />
-                    <TrendChart
-                      days={days}
-                      metric="rhr"
-                      label="Resting HR"
-                      unit=" bpm"
-                      color="#e19789"
-                    />
-                  </section>
-                </div>
-              ) : (
-                <div className="secondary-grid">
-                  <section className="panel">
-                    <PanelHeading
-                      title="Sleep breakdown"
-                      description={`${duration(mean(days.map((d) => d.sleepHours)))} average per night`}
-                    />
-                    <div className="stage-legend">
-                      <Legend color="#766795" label="Deep" />
-                      <Legend color="#b7a3de" label="REM" />
-                      <Legend color="#ddd3ed" label="Light" />
-                    </div>
-                    <SleepChart days={days} />
-                    <div className="panel-footnote">
-                      Sleep-stage totals <span>Naps excluded</span>
-                    </div>
-                  </section>
-                  <section className="panel workout-panel">
-                    <PanelHeading
-                      title="Recent activities"
-                      description={`${workouts.length} sessions in the last ${range} days`}
-                      action={
-                        workouts.length > 3 ? (
-                          <button
-                            className="text-action"
-                            onClick={() => {
-                              setShowAllWorkouts(!showAllWorkouts)
-                              setSection('activity')
-                            }}
-                          >
-                            {showAllWorkouts ? 'Show less' : 'View all'}{' '}
-                            <ArrowRight size={13} />
-                          </button>
-                        ) : undefined
-                      }
-                    />
-                    <div className="workout-list">
-                      {workouts.length ? (
-                        workouts
-                          .slice(0, showAllWorkouts ? undefined : 3)
-                          .map((workout) => (
-                            <WorkoutRow
-                              key={String(workout.id)}
-                              workout={workout}
-                            />
-                          ))
-                      ) : (
-                        <p className="empty-message">
-                          Your recorded workouts will appear here.
-                        </p>
-                      )}
-                    </div>
-                    <div className="workout-summary">
-                      <span>
-                        <Zap size={14} /> Average session strain
-                      </span>
-                      <strong>
-                        {format(
-                          mean(
-                            workouts
-                              .filter((w) => w.score_state === 'SCORED')
-                              .map((w) => w.score?.strain),
-                          ),
-                          1,
-                        )}
-                      </strong>
-                    </div>
-                  </section>
-                </div>
+              <button
+                className="icon-btn"
+                aria-label="Next day"
+                disabled={!canStep(1)}
+                onClick={() => step(1)}
+              >
+                <ChevronRight size={18} />
+              </button>
+              {relativeDay && (
+                <span className="day-caption">{relativeDay}</span>
               )}
-              <div className="bottom-signals">
-                <div>
-                  <span>Blood oxygen</span>
+              {current && latest && current.cycleId !== latest.cycleId && (
+                <button
+                  className="text-btn"
+                  onClick={() => setSelectedDate(null)}
+                >
+                  Latest
+                </button>
+              )}
+            </div>
+
+            <div className="tiles">
+              <Tile
+                label="Recovery"
+                value={format(current?.recovery)}
+                unit={current?.recovery == null ? '' : '%'}
+                color={tone.color}
+                ringValue={current?.recovery ?? null}
+                ringMax={100}
+                note={
+                  current?.recovery == null
+                    ? 'Not scored yet'
+                    : `${tone.label} recovery`
+                }
+                active={section === 'recovery'}
+                onClick={() => setSection('recovery')}
+              />
+              <Tile
+                label="Strain"
+                value={format(current?.strain, 1)}
+                unit=""
+                color={palette.strain}
+                ringValue={current?.strain ?? null}
+                ringMax={21}
+                note={
+                  current?.calories == null
+                    ? 'Not scored yet'
+                    : `${Math.round(current.calories).toLocaleString()} kcal expended`
+                }
+                active={section === 'activity'}
+                onClick={() => setSection('activity')}
+              />
+              <Tile
+                label="Sleep"
+                value={format(current?.sleepPerformance)}
+                unit={current?.sleepPerformance == null ? '' : '%'}
+                color={palette.sleep}
+                ringValue={current?.sleepPerformance ?? null}
+                ringMax={100}
+                note={
+                  current?.sleepHours == null
+                    ? 'Not scored yet'
+                    : current.sleepNeededHours == null
+                      ? `${duration(current.sleepHours)} asleep`
+                      : `${duration(current.sleepHours)} of ${duration(current.sleepNeededHours)} needed`
+                }
+                active={section === 'sleep'}
+                onClick={() => setSection('sleep')}
+              />
+            </div>
+
+            <div className="section-row">
+              <h2>Trends</h2>
+              <Tabs
+                value={String(range)}
+                onValueChange={(value) => setRange(Number(value))}
+              >
+                <TabsList aria-label="Trend date range" className="segmented">
+                  {[7, 30, 90].map((n) => (
+                    <TabsTrigger key={n} value={String(n)}>
+                      {n} days
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
+
+            <div className="grid-main">
+              <section className="panel primary-trend">
+                <PanelHeading
+                  title={
+                    section === 'sleep'
+                      ? 'Time asleep'
+                      : section === 'activity'
+                        ? 'Daily strain'
+                        : 'Recovery'
+                  }
+                  description={`Last ${range} days`}
+                  tip={
+                    section === 'activity'
+                      ? 'WHOOP strain uses a nonlinear 0–21 scale. Daily strain is not the sum of workout strain.'
+                      : 'Only scored days are plotted. Missing values are never treated as zero.'
+                  }
+                />
+                <div className="chart-stat">
                   <strong>
-                    {format(current?.spo2, 1)} <small>%</small>
+                    {metricAverage == null
+                      ? '—'
+                      : trendMetrics[metric].format(metricAverage)}
                   </strong>
+                  <span>average</span>
                 </div>
-                <div>
-                  <span>Skin temperature</span>
-                  <strong>
-                    {format(current?.skinTemp, 1)} <small>°C</small>
-                  </strong>
+                <TrendChart days={days} metric={metric} />
+                <div className="panel-foot">
+                  <span>{days.length} physiological days recorded</span>
+                  <span>Source: WHOOP</span>
                 </div>
-                <div>
-                  <span>Restorative sleep</span>
-                  <strong>
-                    {current?.deepHours != null && current?.remHours != null
-                      ? duration(current.deepHours + current.remHours)
-                      : '—'}
-                  </strong>
+              </section>
+
+              <section className="panel signals-panel">
+                <PanelHeading
+                  title={section === 'sleep' ? 'Sleep quality' : 'Signals'}
+                  description={
+                    current
+                      ? dateLabel(current.date, {
+                          month: 'long',
+                          day: 'numeric',
+                        })
+                      : 'Selected day'
+                  }
+                  tip="Compared with your own recent average. These are measurements, not diagnoses."
+                />
+                <div className="signals">
+                  {section === 'sleep' ? (
+                    <>
+                      <Signal
+                        label="Sleep efficiency"
+                        value={current?.sleepEfficiency}
+                        baseline={mean(days.map((d) => d.sleepEfficiency))}
+                        format={(v) => `${Math.round(v)}%`}
+                        better="up"
+                      />
+                      <Signal
+                        label="Sleep consistency"
+                        value={current?.sleepConsistency}
+                        baseline={mean(days.map((d) => d.sleepConsistency))}
+                        format={(v) => `${Math.round(v)}%`}
+                        better="up"
+                      />
+                      <Signal
+                        label="Restorative sleep"
+                        value={
+                          current?.deepHours != null &&
+                          current?.remHours != null
+                            ? current.deepHours + current.remHours
+                            : null
+                        }
+                        baseline={mean(
+                          days.map((d) =>
+                            d.deepHours != null && d.remHours != null
+                              ? d.deepHours + d.remHours
+                              : null,
+                          ),
+                        )}
+                        format={duration}
+                        epsilon={1 / 60}
+                        better="up"
+                      />
+                      <Signal
+                        label="Respiratory rate"
+                        value={current?.respiratoryRate}
+                        baseline={mean(days.map((d) => d.respiratoryRate))}
+                        format={(v) => `${v.toFixed(1)} rpm`}
+                        epsilon={0.3}
+                      />
+                    </>
+                  ) : section === 'activity' ? (
+                    <>
+                      <Signal
+                        label="Energy expended"
+                        value={current?.calories}
+                        baseline={mean(days.map((d) => d.calories))}
+                        format={(v) => `${Math.round(v).toLocaleString()} kcal`}
+                        epsilon={25}
+                      />
+                      <Signal
+                        label="Sessions"
+                        value={current ? todaysWorkouts.length : null}
+                        baseline={
+                          days.length ? workouts.length / days.length : null
+                        }
+                        format={(v) =>
+                          Number.isInteger(v) ? String(v) : v.toFixed(1)
+                        }
+                      />
+                      <Signal
+                        label="Average heart rate"
+                        value={mean(
+                          todaysWorkouts.map(
+                            (w) => w.score?.average_heart_rate,
+                          ),
+                        )}
+                        baseline={mean(
+                          workouts.map((w) => w.score?.average_heart_rate),
+                        )}
+                        format={(v) => `${Math.round(v)} bpm`}
+                        emptyText="No sessions on this day"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Signal
+                        label="Heart rate variability"
+                        value={current?.hrv}
+                        baseline={mean(days.map((d) => d.hrv))}
+                        format={(v) => `${Math.round(v)} ms`}
+                        better="up"
+                      />
+                      <Signal
+                        label="Resting heart rate"
+                        value={current?.rhr}
+                        baseline={mean(days.map((d) => d.rhr))}
+                        format={(v) => `${Math.round(v)} bpm`}
+                        better="down"
+                      />
+                      <Signal
+                        label="Respiratory rate"
+                        value={current?.respiratoryRate}
+                        baseline={mean(days.map((d) => d.respiratoryRate))}
+                        format={(v) => `${v.toFixed(1)} rpm`}
+                        epsilon={0.3}
+                      />
+                      {section === 'recovery' && (
+                        <>
+                          <Signal
+                            label="Blood oxygen"
+                            value={current?.spo2}
+                            baseline={mean(days.map((d) => d.spo2))}
+                            format={(v) => `${v.toFixed(1)}%`}
+                            epsilon={0.3}
+                          />
+                          <Signal
+                            label="Skin temperature"
+                            value={current?.skinTemp}
+                            baseline={mean(days.map((d) => d.skinTemp))}
+                            format={(v) => `${v.toFixed(1)} °C`}
+                            epsilon={0.2}
+                          />
+                        </>
+                      )}
+                    </>
+                  )}
                 </div>
-                <div>
-                  <span>Days in view</span>
-                  <strong>
-                    {days.length} <small>/ {range}</small>
-                  </strong>
+                <div className="panel-foot">
+                  <span>Compared with your {range}-day average</span>
                 </div>
+              </section>
+            </div>
+
+            {section === 'recovery' ? (
+              <div className="grid-secondary">
+                <section className="panel">
+                  <PanelHeading
+                    title="Heart rate variability"
+                    description="Higher than your baseline usually means you’re well recovered"
+                  />
+                  <TrendChart days={days} metric="hrv" height={200} />
+                </section>
+                <section className="panel">
+                  <PanelHeading
+                    title="Resting heart rate"
+                    description="Lower than your baseline usually means you’re well recovered"
+                  />
+                  <TrendChart days={days} metric="rhr" height={200} />
+                </section>
               </div>
-              <DailyTable days={days} />
-              <footer className="page-footer">
-                <span>
-                  <ShieldCheck size={13} /> Your data. Your perspective.
-                </span>
-                <span>
-                  {preview
-                    ? 'Illustrative demo · not real health data'
-                    : 'Data from WHOOP · Dates follow your physiological cycles'}
-                </span>
-              </footer>
-            </>
-          )}
-        </main>
-      </div>
+            ) : section === 'sleep' ? (
+              <div className="grid-secondary">
+                <NightPanel day={current} />
+                <SleepBreakdownPanel days={days} />
+              </div>
+            ) : section === 'activity' ? (
+              <div className="grid-secondary single">
+                <WorkoutsPanel workouts={workouts} range={range} />
+              </div>
+            ) : (
+              <div className="grid-secondary">
+                <SleepBreakdownPanel days={days} />
+                <WorkoutsPanel
+                  workouts={workouts}
+                  range={range}
+                  limit={3}
+                  onViewAll={() => setSection('activity')}
+                />
+              </div>
+            )}
+
+            <DailyTable days={days} />
+            <footer className="page-foot">
+              {preview
+                ? 'Illustrative demo. Not real health data.'
+                : 'Data from WHOOP. Days follow your physiological cycles, labeled by wake-up date.'}
+            </footer>
+          </>
+        )}
+      </main>
     </div>
   )
 }
 
 function Welcome({ onPreview }: { onPreview: () => void }) {
   return (
-    <div className="welcome">
-      <div className="welcome-copy">
-        <Badge variant="outline" className="welcome-badge">
-          <span className="status-dot online" /> YOUR PERSONAL PERFORMANCE SPACE
-        </Badge>
-        <h1>
-          Know your body.
-          <br />
-          <span>Find your form.</span>
-        </h1>
-        <p>
-          Turn your WHOOP data into a clearer picture of you. Your sleep,
-          recovery, and effort — connected in one thoughtful dashboard.
-        </p>
-        <div className="welcome-actions">
-          <Button asChild size="lg" className="connect-button">
-            <a href="/api/auth/whoop">
-              Connect your WHOOP <ArrowRight size={18} />
-            </a>
-          </Button>
-          <button className="preview-link" onClick={onPreview}>
-            Explore a demo <ArrowUpRight size={16} />
-          </button>
-        </div>
-        <div className="welcome-trust">
-          <ShieldCheck size={16} />
-          <span>
-            Private to you. Read-only access. Connect securely with WHOOP.
-          </span>
-        </div>
+    <section className="welcome">
+      <h1>See your body’s signals clearly.</h1>
+      <p>
+        FORM syncs the last 90 days of recovery, sleep, and strain from your
+        WHOOP account and keeps them private to you.
+      </p>
+      <div className="welcome-actions">
+        <Button asChild size="lg" className="btn-primary">
+          <a href="/api/auth/whoop">
+            Connect WHOOP <ArrowRight size={16} />
+          </a>
+        </Button>
+        <button className="btn-ghost" onClick={onPreview}>
+          Explore the demo
+        </button>
       </div>
-      <div className="welcome-art" aria-hidden="true">
-        <div className="orbital orbital-one" />
-        <div className="orbital orbital-two" />
-        <div className="orbital orbital-three" />
-        <div className="orbit-center">
-          <Waves size={58} strokeWidth={1.3} />
-          <span>IN YOUR ELEMENT</span>
+      <p className="welcome-trust">
+        <ShieldCheck size={15} aria-hidden />
+        Read-only access. Stored only for your account. Disconnect any time.
+      </p>
+      <dl className="welcome-list">
+        <div>
+          <dt>Recovery</dt>
+          <dd>Score, HRV, and resting heart rate against your own baseline.</dd>
         </div>
-        <div className="orbit-label label-recovery">
-          <HeartPulse size={17} />
-          <span>Recover</span>
-          <i />
+        <div>
+          <dt>Sleep</dt>
+          <dd>Stages, sleep need, and consistency, night by night.</dd>
         </div>
-        <div className="orbit-label label-sleep">
-          <Moon size={17} />
-          <span>Rest</span>
-          <i />
+        <div>
+          <dt>Strain</dt>
+          <dd>Daily load and every workout, in context.</dd>
         </div>
-        <div className="orbit-label label-strain">
-          <Zap size={17} />
-          <span>Perform</span>
-          <i />
-        </div>
-      </div>
-      <div className="welcome-features">
-        {[
-          {
-            icon: HeartPulse,
-            title: 'Read your readiness',
-            text: 'Recovery, HRV, and resting heart rate in context.',
-            color: '#d4ed85',
-          },
-          {
-            icon: Moon,
-            title: 'Understand your rest',
-            text: 'Sleep stages, performance, and consistency over time.',
-            color: '#b7a3de',
-          },
-          {
-            icon: Zap,
-            title: 'See your effort',
-            text: 'Daily strain and workouts, with room to spot your patterns.',
-            color: '#eeb57d',
-          },
-        ].map(({ icon: Icon, title, text, color }) => (
-          <div key={title}>
-            <Icon size={23} style={{ color }} />
-            <h2>{title}</h2>
-            <p>{text}</p>
-          </div>
-        ))}
-      </div>
-    </div>
+      </dl>
+    </section>
   )
 }
 
-function MetricCard({
-  title,
+function Tile({
+  label,
   value,
   unit,
-  icon: Icon,
   color,
   ringValue,
   ringMax,
   note,
-  detail,
   active,
   onClick,
 }: {
-  title: string
+  label: string
   value: string
   unit: string
-  icon: LucideIcon
   color: string
   ringValue: number | null
   ringMax: number
   note: string
-  detail: string
   active: boolean
   onClick: () => void
 }) {
   return (
     <button
-      className={cn('metric-card', active && 'selected')}
+      className="tile"
+      data-active={active || undefined}
       onClick={onClick}
     >
-      <div className="metric-title">
-        <span>{title}</span>
-        <ArrowUpRight size={15} />
-      </div>
-      <div className="metric-main">
-        <div className="metric-value">
+      <span className="tile-label">
+        {label}
+        <ChevronRight size={15} aria-hidden />
+      </span>
+      <span className="tile-main">
+        <span className="tile-value">
           {value}
-          <span>{unit}</span>
-        </div>
-        <MetricRing value={ringValue} max={ringMax} color={color} icon={Icon} />
-      </div>
-      <div className="metric-note">
-        <span style={{ color }}>
-          <i style={{ background: color }} />
-          {note}
+          {unit && <span className="tile-unit">{unit}</span>}
         </span>
-        <small>{detail}</small>
-      </div>
+        <MetricRing value={ringValue} max={ringMax} color={color} />
+      </span>
+      <span className="tile-note">
+        <i style={{ background: ringValue == null ? palette.none : color }} />
+        {note}
+      </span>
     </button>
   )
 }
@@ -1065,7 +863,7 @@ function PanelHeading({
           {tip && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <button aria-label={`About ${title}`}>
+                <button className="tip" aria-label={`About ${title}`}>
                   <CircleHelp size={14} />
                 </button>
               </TooltipTrigger>
@@ -1083,59 +881,175 @@ function PanelHeading({
 function Signal({
   label,
   value,
-  unit,
-  icon: Icon,
   baseline,
-  decimals = 0,
+  format,
+  better = 'neutral',
+  epsilon = 0.5,
+  emptyText,
 }: {
   label: string
   value: number | null | undefined
-  unit: string
-  icon: LucideIcon
   baseline: number | null
-  decimals?: number
+  format: (value: number) => string
+  better?: 'up' | 'down' | 'neutral'
+  epsilon?: number
+  emptyText?: string
 }) {
   const difference = value != null && baseline != null ? value - baseline : null
+  const flat = difference != null && Math.abs(difference) < epsilon
+  const toneClass =
+    difference == null || flat || better === 'neutral'
+      ? undefined
+      : difference > 0 === (better === 'up')
+        ? 'good'
+        : 'watch'
   return (
     <div className="signal">
-      <div className="signal-name">
-        <Icon size={17} />
-        <span>{label}</span>
-      </div>
-      <div className="signal-reading">
-        <strong>
-          {format(value, decimals)} <small>{unit}</small>
-        </strong>
-        <span className="signal-change">
-          {difference == null ? (
-            'No baseline yet'
-          ) : Math.abs(difference) < 0.5 ? (
-            <>
-              <Check size={13} /> At your average
-            </>
-          ) : (
-            <>
-              {difference > 0 ? (
-                <ArrowUpRight size={14} />
-              ) : (
-                <ArrowDownRight size={14} />
-              )}
-              {Math.abs(difference).toFixed(decimals)} {unit}{' '}
-              {difference > 0 ? 'above' : 'below'} avg.
-            </>
-          )}
-        </span>
-      </div>
+      <span className="signal-label">{label}</span>
+      <strong className="signal-value">
+        {value == null ? '—' : format(value)}
+      </strong>
+      <span className={cn('signal-delta', toneClass)}>
+        {value == null ? (
+          (emptyText ?? 'No reading')
+        ) : difference == null ? (
+          'No baseline yet'
+        ) : flat ? (
+          'At your average'
+        ) : (
+          <>
+            {difference > 0 ? (
+              <MoveUpRight size={13} aria-hidden />
+            ) : (
+              <MoveDownRight size={13} aria-hidden />
+            )}
+            {difference > 0 ? '+' : '−'}
+            {format(Math.abs(difference))} vs. average
+          </>
+        )}
+      </span>
     </div>
   )
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
+function NightPanel({ day }: { day: DailyStats | undefined }) {
+  const hasSleep = day?.sleepHours != null
+  const need = day?.sleepNeededHours ?? null
+  const ratio = hasSleep && need ? Math.min(1, day.sleepHours! / need) : null
   return (
-    <span>
-      <i style={{ background: color }} />
-      {label}
-    </span>
+    <section className="panel">
+      <PanelHeading
+        title="Last night"
+        description={
+          day?.sleepStart && day.sleepEnd
+            ? `${localTime(day.sleepStart, day.timezoneOffset)} – ${localTime(day.sleepEnd, day.timezoneOffset)}`
+            : day
+              ? dateLabel(day.date, { month: 'long', day: 'numeric' })
+              : 'Selected night'
+        }
+      />
+      {hasSleep && day ? (
+        <div className="night">
+          <div className="chart-stat">
+            <strong>{duration(day.sleepHours)}</strong>
+            <span>
+              asleep{need != null ? ` of ${duration(need)} needed` : ''}
+            </span>
+          </div>
+          {ratio != null && (
+            <div
+              className="meter"
+              role="meter"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(ratio * 100)}
+              aria-label="Sleep need met"
+            >
+              <span style={{ width: `${ratio * 100}%` }} />
+            </div>
+          )}
+          <SleepStagesBar day={day} />
+        </div>
+      ) : (
+        <p className="empty">No scored sleep for this day.</p>
+      )}
+    </section>
+  )
+}
+
+function SleepBreakdownPanel({ days }: { days: DailyStats[] }) {
+  return (
+    <section className="panel">
+      <PanelHeading
+        title="Sleep stages"
+        description={`${duration(mean(days.map((d) => d.sleepHours)))} average per night`}
+        action={
+          <ul className="legend" aria-label="Sleep stages">
+            <li>
+              <i style={{ background: palette.deep }} /> Deep
+            </li>
+            <li>
+              <i style={{ background: palette.rem }} /> REM
+            </li>
+            <li>
+              <i style={{ background: palette.light }} /> Light
+            </li>
+          </ul>
+        }
+      />
+      <SleepChart days={days} />
+      <div className="panel-foot">
+        <span>Nightly stage totals</span>
+        <span>Naps excluded</span>
+      </div>
+    </section>
+  )
+}
+
+function WorkoutsPanel({
+  workouts,
+  range,
+  limit,
+  onViewAll,
+}: {
+  workouts: WhoopRecord[]
+  range: number
+  limit?: number
+  onViewAll?: () => void
+}) {
+  const shown = limit ? workouts.slice(0, limit) : workouts
+  const averageStrain = mean(
+    workouts
+      .filter((w) => w.score_state === 'SCORED')
+      .map((w) => w.score?.strain),
+  )
+  return (
+    <section className="panel">
+      <PanelHeading
+        title="Activities"
+        description={`${workouts.length} ${workouts.length === 1 ? 'session' : 'sessions'} in the last ${range} days`}
+        action={
+          onViewAll && workouts.length > (limit ?? 0) ? (
+            <button className="text-btn" onClick={onViewAll}>
+              View all <ArrowRight size={14} aria-hidden />
+            </button>
+          ) : undefined
+        }
+      />
+      <div className="workouts">
+        {shown.length ? (
+          shown.map((workout) => (
+            <WorkoutRow key={String(workout.id)} workout={workout} />
+          ))
+        ) : (
+          <p className="empty">Recorded workouts will appear here.</p>
+        )}
+      </div>
+      <div className="panel-foot">
+        <span>Average session strain</span>
+        <strong>{format(averageStrain, 1)}</strong>
+      </div>
+    </section>
   )
 }
 
@@ -1153,50 +1067,51 @@ function WorkoutRow({ workout }: { workout: WhoopRecord }) {
         3_600_000
       : null
   return (
-    <details className="workout-row">
+    <details className="workout">
       <summary>
         <span className="workout-icon">
-          <Icon size={20} />
+          <Icon size={18} strokeWidth={1.75} />
         </span>
         <span className="workout-info">
           <strong>{sport}</strong>
           <span>
             {workout.start
-              ? dateLabel(localDate(workout.start, workout.timezone_offset))
-              : ''}{' '}
-            <i />
-            {duration(workoutHours)}
+              ? `${dateLabel(localDate(workout.start, workout.timezone_offset), { weekday: 'short', month: 'short', day: 'numeric' })} · ${localTime(workout.start, workout.timezone_offset)}`
+              : ''}
+            {workoutHours != null && ` · ${duration(workoutHours)}`}
           </span>
         </span>
         <span className="workout-strain">
-          {format(score?.strain, 1)}
-          <small>STRAIN</small>
+          <strong>{format(score?.strain, 1)}</strong>
+          <small>strain</small>
         </span>
-        <ChevronDown size={14} />
+        <ChevronDown size={16} aria-hidden />
       </summary>
-      <div className="workout-detail">
-        <span>
-          Average HR <strong>{format(score?.average_heart_rate)} bpm</strong>
-        </span>
-        <span>
-          Max HR <strong>{format(score?.max_heart_rate)} bpm</strong>
-        </span>
-        <span>
-          Energy{' '}
-          <strong>
+      <dl className="workout-detail">
+        <div>
+          <dt>Average HR</dt>
+          <dd>{format(score?.average_heart_rate)} bpm</dd>
+        </div>
+        <div>
+          <dt>Max HR</dt>
+          <dd>{format(score?.max_heart_rate)} bpm</dd>
+        </div>
+        <div>
+          <dt>Energy</dt>
+          <dd>
             {score?.kilojoule == null
               ? '—'
-              : Math.round(score.kilojoule / 4.184)}{' '}
+              : Math.round(score.kilojoule / 4.184).toLocaleString()}{' '}
             kcal
-          </strong>
-        </span>
+          </dd>
+        </div>
         {score?.distance_meter != null && (
-          <span>
-            Distance{' '}
-            <strong>{(score.distance_meter / 1000).toFixed(2)} km</strong>
-          </span>
+          <div>
+            <dt>Distance</dt>
+            <dd>{(score.distance_meter / 1000).toFixed(2)} km</dd>
+          </div>
         )}
-      </div>
+      </dl>
     </details>
   )
 }
@@ -1205,7 +1120,7 @@ function DailyTable({ days }: { days: DailyStats[] }) {
   return (
     <details className="daily-table">
       <summary>
-        Explore daily data <ChevronDown size={15} />
+        Daily values <ChevronDown size={15} aria-hidden />
       </summary>
       <div className="table-scroll">
         <table>
@@ -1236,23 +1151,31 @@ function DailyTable({ days }: { days: DailyStats[] }) {
             {[...days].reverse().map((day) => (
               <tr key={day.cycleId}>
                 <th scope="row">{dateLabel(day.date)}</th>
-                <td style={{ color: recoveryColor(day.recovery) }}>
-                  {format(day.recovery)}
-                  {day.recovery == null ? '' : '%'}
+                <td>
+                  {day.recovery == null ? (
+                    '—'
+                  ) : (
+                    <span className="cell-status">
+                      <i
+                        style={{ background: recoveryTone(day.recovery).color }}
+                      />
+                      {day.recovery}%
+                    </span>
+                  )}
                 </td>
                 <td>{format(day.strain, 1)}</td>
                 <td>{duration(day.sleepHours)}</td>
                 <td>{duration(day.deepHours)}</td>
                 <td>{duration(day.remHours)}</td>
                 <td>{duration(day.lightHours)}</td>
-                <td>{format(day.hrv)} ms</td>
-                <td>{format(day.rhr)} bpm</td>
+                <td>{day.hrv == null ? '—' : `${Math.round(day.hrv)} ms`}</td>
+                <td>{day.rhr == null ? '—' : `${Math.round(day.rhr)} bpm`}</td>
               </tr>
             ))}
           </tbody>
         </table>
         {!days.length && (
-          <p className="empty-message">No recorded days in this range.</p>
+          <p className="empty">No recorded days in this range.</p>
         )}
       </div>
     </details>
@@ -1261,19 +1184,14 @@ function DailyTable({ days }: { days: DailyStats[] }) {
 
 function LoadingDashboard() {
   return (
-    <div
-      className="loading-dashboard"
-      role="status"
-      aria-label="Loading dashboard"
-    >
-      <Skeleton className="h-5 w-40" />
-      <Skeleton className="mt-5 h-10 w-80 max-w-full" />
-      <div className="metrics-grid mt-12">
+    <div className="loading" role="status" aria-label="Loading dashboard">
+      <Skeleton className="h-8 w-72 max-w-full" />
+      <div className="tiles">
         {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-52 rounded-2xl" />
+          <Skeleton key={i} className="h-40 rounded-2xl" />
         ))}
       </div>
-      <Skeleton className="mt-6 h-80 rounded-2xl" />
+      <Skeleton className="h-80 rounded-2xl" />
     </div>
   )
 }

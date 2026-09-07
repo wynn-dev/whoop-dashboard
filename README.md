@@ -55,8 +55,14 @@ not need to paste an access token into the environment file.
 ## Features and data behavior
 
 - Overview, recovery, sleep, and activity views; 7-, 30-, and 90-day trends.
-- Day selector, sleep-stage charts, workout details, HRV/RHR trends, and an
-  accessible daily-values table. Responsive layout and reduced-motion support.
+- The selected physiological day is the page heading. Step days with the
+  arrows, the left/right keyboard keys, or the day picker; **Latest** jumps
+  back to the newest day.
+- Day tiles for recovery, strain, and sleep; signals compared with your own
+  range average; a last-night panel with bedtime, sleep need, and stages;
+  sleep-stage and HRV/RHR trends; workout details; and an accessible
+  daily-values table. Responsive layout with a bottom tab bar on phones, and
+  reduced-motion support.
 - The main sleep's wake-up date and recorded timezone determine a cycle's
   display date. Pending/missing scores remain absent, not zero. Naps are
   excluded from the nightly breakdown. Energy is converted from kJ to kcal.

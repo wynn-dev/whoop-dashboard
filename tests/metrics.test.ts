@@ -3,6 +3,7 @@ import {
   buildDailyStats,
   duration,
   localDate,
+  localTime,
   mean,
   type StoredRecord,
 } from '../src/lib/whoop'
@@ -88,6 +89,10 @@ describe('WHOOP physiological dates and metrics', () => {
     expect(mean([null])).toBeNull()
     expect(duration(7 + 59.8 / 60)).toBe('8h 00m')
     expect(duration(null)).toBe('—')
+  })
+  it('formats wall-clock times in the recorded timezone', () => {
+    expect(localTime('2026-09-06T21:30:00Z', '+02:00')).toBe('11:30 PM')
+    expect(localTime('2026-09-07T11:05:00Z', '-05:00')).toBe('6:05 AM')
   })
   it('labels a cycle by the main sleep wake-up date, not the previous bedtime', () => {
     const [day] = buildDailyStats([
