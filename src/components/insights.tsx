@@ -41,7 +41,7 @@ const kcal = (value: number | null) =>
 const signedDuration = (hours: number) =>
   `${hours < -1 / 120 ? '−' : hours > 1 / 120 ? '+' : ''}${duration(Math.abs(hours))}`
 
-function Heading({
+export function Heading({
   title,
   description,
   action,
@@ -61,7 +61,7 @@ function Heading({
   )
 }
 
-function Delta({
+export function Delta({
   difference,
   better,
   format,

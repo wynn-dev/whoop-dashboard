@@ -65,6 +65,15 @@ not need to paste an access token into the environment file.
   with bedtime and wake spread and a 7-night balance against need, 7-day vs
   28-day training load, and a by-sport breakdown. All descriptive, never
   prescriptive.
+- An Insights tab with deeper, gated analysis: Spearman relationships with
+  95% intervals (20+ paired days), unusual nights where two or more signals
+  leave their own 30-day robust range, an HRV readiness band on log HRV
+  (7-day geometric mean vs 28-day mean ± 0.5 SD), month-against-month
+  medians, day-to-day stability, rolling sleep balance, sleep architecture,
+  regularity and social jetlag, nap and evening-session comparisons,
+  bounce-back time, hard-day sequences, Foster monotony, time in HR zones,
+  the morning after by sport, highlights, and data coverage. Every panel
+  states its sample and explains its method inline.
 - Day tiles for recovery, strain, and sleep; signals compared with your own
   range average; a last-night panel with bedtime, sleep need, and stages;
   sleep-stage and HRV/RHR trends; workout details; and an accessible
