@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import './health.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -1125,7 +1126,7 @@
     bottom: 0;
     z-index: 30;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 0;
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
     background: rgb(15 16 14 / 0.92);

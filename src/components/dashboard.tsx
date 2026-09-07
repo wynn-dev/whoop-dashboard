@@ -19,6 +19,7 @@ import {
   MoveUpRight,
   RefreshCw,
   ShieldCheck,
+  ScanHeart,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -49,6 +50,8 @@ import {
 import {
   buildDailyStats,
   duration,
+  daysThrough,
+  shiftDate,
   localDate,
   localTime,
   mean,
@@ -59,11 +62,15 @@ import {
 import { palette, recoveryTone } from '@/lib/palette'
 import { demoDashboard } from '@/lib/demo'
 import { DayPicker } from './day-picker'
+import { HealthMonitor } from './health-monitor'
+import { SleepDetails } from './sleep-details'
+import { DailyHeartRate, WorkoutDetails } from './workout-details'
 import { cn } from '@/lib/utils'
 
-type Section = 'overview' | 'recovery' | 'sleep' | 'activity'
+type Section = 'overview' | 'recovery' | 'sleep' | 'activity' | 'health'
 const sections: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
+  { id: 'health', label: 'Health', icon: ScanHeart },
   { id: 'recovery', label: 'Recovery', icon: HeartPulse },
   { id: 'sleep', label: 'Sleep', icon: Moon },
   { id: 'activity', label: 'Activity', icon: Activity },
@@ -73,6 +80,7 @@ const primaryMetric: Record<Section, TrendMetric> = {
   recovery: 'recovery',
   sleep: 'sleepHours',
   activity: 'strain',
+  health: 'hrv',
 }
 const authErrors: Record<string, string> = {
   invalid_state: 'Your connection request expired. Please connect again.',
@@ -184,13 +192,11 @@ export function Dashboard() {
   }, [data, preview])
 
   const allDays = useMemo(() => buildDailyStats(data?.records ?? []), [data])
-  const cutoff = localDate(
-    new Date(Date.now() - (range - 1) * 86_400_000).toISOString(),
-    allDays.at(-1)?.timezoneOffset,
-  )
-  const days = allDays.filter((day) => day.date >= cutoff)
   const latest = allDays.at(-1)
   const current = allDays.find((day) => day.cycleId === selectedDate) ?? latest
+  const periodEnd = current?.date ?? localDate(new Date().toISOString())
+  const cutoff = shiftDate(periodEnd, 1 - range)
+  const days = daysThrough(allDays, periodEnd, range)
   const currentIndex = current
     ? allDays.findIndex((day) => day.cycleId === current.cycleId)
     : -1
@@ -207,7 +213,8 @@ export function Dashboard() {
       (r) =>
         r.kind === 'workout' &&
         r.data.start &&
-        localDate(r.data.start, r.data.timezone_offset) >= cutoff,
+        localDate(r.data.start, r.data.timezone_offset) >= cutoff &&
+        localDate(r.data.start, r.data.timezone_offset) <= periodEnd,
     )
     .map((r) => r.data)
     .sort((a, b) => (b.start ?? '').localeCompare(a.start ?? ''))
@@ -253,7 +260,10 @@ export function Dashboard() {
     if (window.matchMedia('(max-width: 760px)').matches)
       requestAnimationFrame(() =>
         trendsRef.current?.scrollIntoView({
-          behavior: 'smooth',
+          behavior: window.matchMedia('(prefers-reduced-motion: reduce)')
+            .matches
+            ? 'instant'
+            : 'smooth',
           block: 'start',
         }),
       )
@@ -303,7 +313,10 @@ export function Dashboard() {
               <button
                 key={id}
                 className="nav-item"
-                onClick={() => setSection(id)}
+                onClick={() => {
+                  setSection(id)
+                  window.scrollTo({ top: 0, behavior: 'instant' })
+                }}
                 aria-current={section === id ? 'page' : undefined}
               >
                 <Icon size={18} strokeWidth={1.75} aria-hidden />
@@ -457,58 +470,60 @@ export function Dashboard() {
               )}
             </div>
 
-            <div className="tiles">
-              <Tile
-                label="Recovery"
-                value={format(current?.recovery)}
-                unit={current?.recovery == null ? '' : '%'}
-                color={tone.color}
-                ringValue={current?.recovery ?? null}
-                ringMax={100}
-                note={
-                  current?.recovery == null
-                    ? 'Not scored yet'
-                    : `${tone.label} recovery`
-                }
-                active={section === 'recovery'}
-                onClick={() => showSection('recovery')}
-              />
-              <Tile
-                label="Strain"
-                value={format(current?.strain, 1)}
-                unit=""
-                color={palette.strain}
-                ringValue={current?.strain ?? null}
-                ringMax={21}
-                note={
-                  current?.calories == null
-                    ? 'Not scored yet'
-                    : `${Math.round(current.calories).toLocaleString()} kcal expended`
-                }
-                active={section === 'activity'}
-                onClick={() => showSection('activity')}
-              />
-              <Tile
-                label="Sleep"
-                value={format(current?.sleepPerformance)}
-                unit={current?.sleepPerformance == null ? '' : '%'}
-                color={palette.sleep}
-                ringValue={current?.sleepPerformance ?? null}
-                ringMax={100}
-                note={
-                  current?.sleepHours == null
-                    ? 'Not scored yet'
-                    : current.sleepNeededHours == null
-                      ? `${duration(current.sleepHours)} asleep`
-                      : `${duration(current.sleepHours)} of ${duration(current.sleepNeededHours)} needed`
-                }
-                active={section === 'sleep'}
-                onClick={() => showSection('sleep')}
-              />
-            </div>
+            {section !== 'health' && (
+              <div className="tiles">
+                <Tile
+                  label="Recovery"
+                  value={format(current?.recovery)}
+                  unit={current?.recovery == null ? '' : '%'}
+                  color={tone.color}
+                  ringValue={current?.recovery ?? null}
+                  ringMax={100}
+                  note={
+                    current?.recovery == null
+                      ? 'Not scored yet'
+                      : `${tone.label} recovery`
+                  }
+                  active={section === 'recovery'}
+                  onClick={() => showSection('recovery')}
+                />
+                <Tile
+                  label="Strain"
+                  value={format(current?.strain, 1)}
+                  unit=""
+                  color={palette.strain}
+                  ringValue={current?.strain ?? null}
+                  ringMax={21}
+                  note={
+                    current?.calories == null
+                      ? 'Not scored yet'
+                      : `${Math.round(current.calories).toLocaleString()} kcal expended`
+                  }
+                  active={section === 'activity'}
+                  onClick={() => showSection('activity')}
+                />
+                <Tile
+                  label="Sleep"
+                  value={format(current?.sleepPerformance)}
+                  unit={current?.sleepPerformance == null ? '' : '%'}
+                  color={palette.sleep}
+                  ringValue={current?.sleepPerformance ?? null}
+                  ringMax={100}
+                  note={
+                    current?.sleepHours == null
+                      ? 'Not scored yet'
+                      : current.sleepNeededHours == null
+                        ? `${duration(current.sleepHours)} asleep`
+                        : `${duration(current.sleepHours)} of ${duration(current.sleepNeededHours)} needed`
+                  }
+                  active={section === 'sleep'}
+                  onClick={() => showSection('sleep')}
+                />
+              </div>
+            )}
 
             <div className="section-row" ref={trendsRef}>
-              <h2>Trends</h2>
+              <h2>{section === 'health' ? 'Health Monitor' : 'Trends'}</h2>
               <Tabs
                 value={String(range)}
                 onValueChange={(value) => setRange(Number(value))}
@@ -524,219 +539,257 @@ export function Dashboard() {
             </div>
 
             <div className="section-body" key={section}>
-              <div className="grid-main">
-                <section className="panel primary-trend">
-                  <PanelHeading
-                    title={
-                      section === 'sleep'
-                        ? 'Time asleep'
-                        : section === 'activity'
-                          ? 'Daily strain'
-                          : 'Recovery'
-                    }
-                    description={`Last ${range} days`}
-                    tip={
-                      section === 'activity'
-                        ? 'WHOOP strain uses a nonlinear 0–21 scale. Daily strain is not the sum of workout strain.'
-                        : 'Only scored days are plotted. Missing values are never treated as zero.'
-                    }
-                  />
-                  <div className="chart-stat">
-                    <strong>
-                      {metricAverage == null
-                        ? '—'
-                        : trendMetrics[metric].format(metricAverage)}
-                    </strong>
-                    <span>average</span>
-                  </div>
-                  <TrendChart days={days} metric={metric} />
-                  <div className="panel-foot">
-                    <span>{days.length} physiological days recorded</span>
-                    <span>Source: WHOOP</span>
-                  </div>
-                </section>
+              {section === 'health' ? (
+                <HealthMonitor days={allDays} current={current} range={range} />
+              ) : (
+                <>
+                  <div className="grid-main">
+                    <section className="panel primary-trend">
+                      <PanelHeading
+                        title={
+                          section === 'sleep'
+                            ? 'Time asleep'
+                            : section === 'activity'
+                              ? 'Daily strain'
+                              : 'Recovery'
+                        }
+                        description={`${range} days through ${dateLabel(periodEnd)}`}
+                        tip={
+                          section === 'activity'
+                            ? 'WHOOP strain uses a nonlinear 0–21 scale. Daily strain is not the sum of workout strain.'
+                            : 'Only scored days are plotted. Missing values are never treated as zero.'
+                        }
+                      />
+                      <div className="chart-stat">
+                        <strong>
+                          {metricAverage == null
+                            ? '—'
+                            : trendMetrics[metric].format(metricAverage)}
+                        </strong>
+                        <span>average</span>
+                      </div>
+                      <TrendChart days={days} metric={metric} />
+                      <div className="panel-foot">
+                        <span>{days.length} physiological days recorded</span>
+                        <span>Source: WHOOP</span>
+                      </div>
+                    </section>
 
-                <section className="panel signals-panel">
-                  <PanelHeading
-                    title={section === 'sleep' ? 'Sleep quality' : 'Signals'}
-                    description={
-                      current
-                        ? dateLabel(current.date, {
-                            month: 'long',
-                            day: 'numeric',
-                          })
-                        : 'Selected day'
-                    }
-                    tip="Compared with your own recent average. These are measurements, not diagnoses."
-                  />
-                  <div className="signals">
-                    {section === 'sleep' ? (
-                      <>
-                        <Signal
-                          label="Sleep efficiency"
-                          value={current?.sleepEfficiency}
-                          baseline={mean(days.map((d) => d.sleepEfficiency))}
-                          format={(v) => `${Math.round(v)}%`}
-                          better="up"
-                        />
-                        <Signal
-                          label="Sleep consistency"
-                          value={current?.sleepConsistency}
-                          baseline={mean(days.map((d) => d.sleepConsistency))}
-                          format={(v) => `${Math.round(v)}%`}
-                          better="up"
-                        />
-                        <Signal
-                          label="Restorative sleep"
-                          value={
-                            current?.deepHours != null &&
-                            current?.remHours != null
-                              ? current.deepHours + current.remHours
-                              : null
-                          }
-                          baseline={mean(
-                            days.map((d) =>
-                              d.deepHours != null && d.remHours != null
-                                ? d.deepHours + d.remHours
-                                : null,
-                            ),
-                          )}
-                          format={duration}
-                          epsilon={1 / 60}
-                          better="up"
-                        />
-                        <Signal
-                          label="Respiratory rate"
-                          value={current?.respiratoryRate}
-                          baseline={mean(days.map((d) => d.respiratoryRate))}
-                          format={(v) => `${v.toFixed(1)} rpm`}
-                          epsilon={0.3}
-                        />
-                      </>
-                    ) : section === 'activity' ? (
-                      <>
-                        <Signal
-                          label="Energy expended"
-                          value={current?.calories}
-                          baseline={mean(days.map((d) => d.calories))}
-                          format={(v) =>
-                            `${Math.round(v).toLocaleString()} kcal`
-                          }
-                          epsilon={25}
-                        />
-                        <Signal
-                          label="Sessions"
-                          value={current ? todaysWorkouts.length : null}
-                          baseline={
-                            days.length ? workouts.length / days.length : null
-                          }
-                          format={(v) =>
-                            Number.isInteger(v) ? String(v) : v.toFixed(1)
-                          }
-                        />
-                        <Signal
-                          label="Average heart rate"
-                          value={mean(
-                            todaysWorkouts.map(
-                              (w) => w.score?.average_heart_rate,
-                            ),
-                          )}
-                          baseline={mean(
-                            workouts.map((w) => w.score?.average_heart_rate),
-                          )}
-                          format={(v) => `${Math.round(v)} bpm`}
-                          emptyText="No sessions on this day"
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <Signal
-                          label="Heart rate variability"
-                          value={current?.hrv}
-                          baseline={mean(days.map((d) => d.hrv))}
-                          format={(v) => `${Math.round(v)} ms`}
-                          better="up"
-                        />
-                        <Signal
-                          label="Resting heart rate"
-                          value={current?.rhr}
-                          baseline={mean(days.map((d) => d.rhr))}
-                          format={(v) => `${Math.round(v)} bpm`}
-                          better="down"
-                        />
-                        <Signal
-                          label="Respiratory rate"
-                          value={current?.respiratoryRate}
-                          baseline={mean(days.map((d) => d.respiratoryRate))}
-                          format={(v) => `${v.toFixed(1)} rpm`}
-                          epsilon={0.3}
-                        />
-                        {section === 'recovery' && (
+                    <section className="panel signals-panel">
+                      <PanelHeading
+                        title={
+                          section === 'sleep' ? 'Sleep quality' : 'Signals'
+                        }
+                        description={
+                          current
+                            ? dateLabel(current.date, {
+                                month: 'long',
+                                day: 'numeric',
+                              })
+                            : 'Selected day'
+                        }
+                        tip="Compared with your own recent average. These are measurements, not diagnoses."
+                      />
+                      <div className="signals">
+                        {section === 'sleep' ? (
                           <>
                             <Signal
-                              label="Blood oxygen"
-                              value={current?.spo2}
-                              baseline={mean(days.map((d) => d.spo2))}
-                              format={(v) => `${v.toFixed(1)}%`}
-                              epsilon={0.3}
+                              label="Sleep efficiency"
+                              value={current?.sleepEfficiency}
+                              baseline={mean(
+                                days.map((d) => d.sleepEfficiency),
+                              )}
+                              format={(v) => `${Math.round(v)}%`}
+                              better="up"
                             />
                             <Signal
-                              label="Skin temperature"
-                              value={current?.skinTemp}
-                              baseline={mean(days.map((d) => d.skinTemp))}
-                              format={(v) => `${v.toFixed(1)} °C`}
-                              epsilon={0.2}
+                              label="Sleep consistency"
+                              value={current?.sleepConsistency}
+                              baseline={mean(
+                                days.map((d) => d.sleepConsistency),
+                              )}
+                              format={(v) => `${Math.round(v)}%`}
+                              better="up"
+                            />
+                            <Signal
+                              label="Restorative sleep"
+                              value={
+                                current?.deepHours != null &&
+                                current?.remHours != null
+                                  ? current.deepHours + current.remHours
+                                  : null
+                              }
+                              baseline={mean(
+                                days.map((d) =>
+                                  d.deepHours != null && d.remHours != null
+                                    ? d.deepHours + d.remHours
+                                    : null,
+                                ),
+                              )}
+                              format={duration}
+                              epsilon={1 / 60}
+                              better="up"
+                            />
+                            <Signal
+                              label="Respiratory rate"
+                              value={current?.respiratoryRate}
+                              baseline={mean(
+                                days.map((d) => d.respiratoryRate),
+                              )}
+                              format={(v) => `${v.toFixed(1)} rpm`}
+                              epsilon={0.3}
                             />
                           </>
+                        ) : section === 'activity' ? (
+                          <>
+                            <Signal
+                              label="Energy expended"
+                              value={current?.calories}
+                              baseline={mean(days.map((d) => d.calories))}
+                              format={(v) =>
+                                `${Math.round(v).toLocaleString()} kcal`
+                              }
+                              epsilon={25}
+                            />
+                            <Signal
+                              label="Sessions"
+                              value={current ? todaysWorkouts.length : null}
+                              baseline={
+                                days.length
+                                  ? workouts.length / days.length
+                                  : null
+                              }
+                              format={(v) =>
+                                Number.isInteger(v) ? String(v) : v.toFixed(1)
+                              }
+                            />
+                            <Signal
+                              label="Daily average heart rate"
+                              value={current?.averageHeartRate}
+                              baseline={mean(
+                                days.map((d) => d.averageHeartRate),
+                              )}
+                              format={(v) => `${Math.round(v)} bpm`}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <Signal
+                              label="Heart rate variability"
+                              value={current?.hrv}
+                              baseline={mean(days.map((d) => d.hrv))}
+                              format={(v) => `${Math.round(v)} ms`}
+                              better="up"
+                            />
+                            <Signal
+                              label="Resting heart rate"
+                              value={current?.rhr}
+                              baseline={mean(days.map((d) => d.rhr))}
+                              format={(v) => `${Math.round(v)} bpm`}
+                              better="down"
+                            />
+                            <Signal
+                              label="Respiratory rate"
+                              value={current?.respiratoryRate}
+                              baseline={mean(
+                                days.map((d) => d.respiratoryRate),
+                              )}
+                              format={(v) => `${v.toFixed(1)} rpm`}
+                              epsilon={0.3}
+                            />
+                            {section === 'recovery' && (
+                              <>
+                                <Signal
+                                  label="Blood oxygen"
+                                  value={current?.spo2}
+                                  baseline={mean(days.map((d) => d.spo2))}
+                                  format={(v) => `${v.toFixed(1)}%`}
+                                  epsilon={0.3}
+                                />
+                                <Signal
+                                  label="Skin temperature"
+                                  value={current?.skinTemp}
+                                  baseline={mean(days.map((d) => d.skinTemp))}
+                                  format={(v) => `${v.toFixed(1)} °C`}
+                                  epsilon={0.2}
+                                />
+                              </>
+                            )}
+                          </>
                         )}
-                      </>
-                    )}
+                      </div>
+                      <div className="panel-foot">
+                        <span>Compared with your {range}-day average</span>
+                        {(section === 'overview' || section === 'recovery') && (
+                          <button
+                            className="text-btn"
+                            onClick={() => showSection('health')}
+                          >
+                            Health Monitor <ArrowRight size={13} aria-hidden />
+                          </button>
+                        )}
+                      </div>
+                    </section>
                   </div>
-                  <div className="panel-foot">
-                    <span>Compared with your {range}-day average</span>
-                  </div>
-                </section>
-              </div>
 
-              {section === 'recovery' ? (
-                <div className="grid-secondary">
-                  <section className="panel">
-                    <PanelHeading
-                      title="Heart rate variability"
-                      description="Higher than your baseline usually means you’re well recovered"
-                    />
-                    <TrendChart days={days} metric="hrv" height={200} />
-                  </section>
-                  <section className="panel">
-                    <PanelHeading
-                      title="Resting heart rate"
-                      description="Lower than your baseline usually means you’re well recovered"
-                    />
-                    <TrendChart days={days} metric="rhr" height={200} />
-                  </section>
-                </div>
-              ) : section === 'sleep' ? (
-                <div className="grid-secondary">
-                  <NightPanel day={current} />
-                  <SleepBreakdownPanel days={days} />
-                </div>
-              ) : section === 'activity' ? (
-                <div className="grid-secondary single">
-                  <WorkoutsPanel workouts={workouts} range={range} />
-                </div>
-              ) : (
-                <div className="grid-secondary">
-                  <SleepBreakdownPanel days={days} />
-                  <WorkoutsPanel
-                    workouts={workouts}
-                    range={range}
-                    limit={3}
-                    onViewAll={() => setSection('activity')}
-                  />
-                </div>
+                  {section === 'recovery' ? (
+                    <div className="grid-secondary">
+                      <section className="panel">
+                        <PanelHeading
+                          title="Heart rate variability"
+                          description="Your readings over time; explore personal comparisons in Health"
+                        />
+                        <TrendChart days={days} metric="hrv" height={200} />
+                      </section>
+                      <section className="panel">
+                        <PanelHeading
+                          title="Resting heart rate"
+                          description="Your readings over time; explore personal comparisons in Health"
+                        />
+                        <TrendChart days={days} metric="rhr" height={200} />
+                      </section>
+                    </div>
+                  ) : section === 'sleep' ? (
+                    <div className="grid-secondary">
+                      <NightPanel day={current} />
+                      <SleepBreakdownPanel days={days} />
+                    </div>
+                  ) : section === 'activity' ? (
+                    <>
+                      <div className="grid-secondary">
+                        <DailyHeartRate day={current} />
+                        <WorkoutsPanel
+                          key={current?.cycleId}
+                          workouts={todaysWorkouts}
+                          range={1}
+                        />
+                      </div>
+                      <div className="grid-secondary single">
+                        <WorkoutsPanel
+                          key={`${periodEnd}-${range}`}
+                          workouts={workouts}
+                          range={range}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div className="grid-secondary">
+                      <SleepBreakdownPanel days={days} />
+                      <WorkoutsPanel
+                        workouts={workouts}
+                        range={range}
+                        limit={3}
+                        onViewAll={() => setSection('activity')}
+                      />
+                    </div>
+                  )}
+                  {section === 'sleep' && (
+                    <SleepDetails day={current} records={data.records} />
+                  )}
+                </>
               )}
             </div>
-            <DailyTable days={days} />
+            {section !== 'health' && <DailyTable days={days} />}
             <footer className="page-foot">
               {preview
                 ? 'Illustrative demo. Not real health data.'
@@ -930,7 +983,11 @@ function NightPanel({ day }: { day: DailyStats | undefined }) {
   return (
     <section className="panel">
       <PanelHeading
-        title="Last night"
+        title={
+          day?.date === localDate(new Date().toISOString(), day?.timezoneOffset)
+            ? 'Last night'
+            : 'Selected night'
+        }
         description={
           day?.sleepStart && day.sleepEnd
             ? `${localTime(day.sleepStart, day.timezoneOffset)} – ${localTime(day.sleepEnd, day.timezoneOffset)}`
@@ -1008,7 +1065,8 @@ function WorkoutsPanel({
   limit?: number
   onViewAll?: () => void
 }) {
-  const shown = limit ? workouts.slice(0, limit) : workouts
+  const [visibleCount, setVisibleCount] = useState(6)
+  const shown = workouts.slice(0, limit ?? visibleCount)
   const averageStrain = mean(
     workouts
       .filter((w) => w.score_state === 'SCORED')
@@ -1017,8 +1075,8 @@ function WorkoutsPanel({
   return (
     <section className="panel">
       <PanelHeading
-        title="Activities"
-        description={`${workouts.length} ${workouts.length === 1 ? 'session' : 'sessions'} in the last ${range} days`}
+        title={range === 1 ? 'Selected-day activities' : 'Activities'}
+        description={`${workouts.length} ${workouts.length === 1 ? 'session' : 'sessions'} ${range === 1 ? 'on the selected day' : `in the ${range}-day period`}`}
         action={
           onViewAll && workouts.length > (limit ?? 0) ? (
             <button className="text-btn" onClick={onViewAll}>
@@ -1036,6 +1094,25 @@ function WorkoutsPanel({
           <p className="empty">Recorded workouts will appear here.</p>
         )}
       </div>
+      {!limit && workouts.length > 6 && (
+        <div className="workout-pagination">
+          <span>
+            Showing {shown.length} of {workouts.length}
+          </span>
+          <button
+            className="text-btn"
+            onClick={() =>
+              setVisibleCount(
+                shown.length < workouts.length ? visibleCount + 6 : 6,
+              )
+            }
+          >
+            {shown.length < workouts.length
+              ? `Show ${Math.min(6, workouts.length - shown.length)} more`
+              : 'Show fewer'}
+          </button>
+        </div>
+      )}
       <div className="panel-foot">
         <span>Average session strain</span>
         <strong>{format(averageStrain, 1)}</strong>
@@ -1103,6 +1180,7 @@ function WorkoutRow({ workout }: { workout: WhoopRecord }) {
           </div>
         )}
       </dl>
+      <WorkoutDetails workout={workout} />
     </details>
   )
 }
@@ -1113,7 +1191,12 @@ function DailyTable({ days }: { days: DailyStats[] }) {
       <summary>
         Daily values <ChevronDown size={15} aria-hidden />
       </summary>
-      <div className="table-scroll">
+      <div
+        className="table-scroll"
+        tabIndex={0}
+        role="region"
+        aria-label="Daily values table"
+      >
         <table>
           <caption className="sr-only">
             Daily WHOOP metrics for the selected range. A dash means a score is
@@ -1131,6 +1214,14 @@ function DailyTable({ days }: { days: DailyStats[] }) {
                 'Light',
                 'HRV',
                 'Resting HR',
+                'Respiratory rate',
+                'Blood oxygen',
+                'Skin temperature',
+                'Daily average HR',
+                'Daily max HR',
+                'Sleep debt',
+                'Disturbances',
+                'Sleep cycles',
               ].map((label) => (
                 <th key={label} scope="col">
                   {label}
@@ -1161,6 +1252,28 @@ function DailyTable({ days }: { days: DailyStats[] }) {
                 <td>{duration(day.lightHours)}</td>
                 <td>{day.hrv == null ? '—' : `${Math.round(day.hrv)} ms`}</td>
                 <td>{day.rhr == null ? '—' : `${Math.round(day.rhr)} bpm`}</td>
+                <td>
+                  {day.respiratoryRate == null
+                    ? '—'
+                    : `${day.respiratoryRate.toFixed(1)} rpm`}
+                </td>
+                <td>{day.spo2 == null ? '—' : `${day.spo2.toFixed(1)}%`}</td>
+                <td>
+                  {day.skinTemp == null ? '—' : `${day.skinTemp.toFixed(1)} °C`}
+                </td>
+                <td>
+                  {day.averageHeartRate == null
+                    ? '—'
+                    : `${Math.round(day.averageHeartRate)} bpm`}
+                </td>
+                <td>
+                  {day.maxHeartRate == null
+                    ? '—'
+                    : `${Math.round(day.maxHeartRate)} bpm`}
+                </td>
+                <td>{duration(day.sleepDebtHours)}</td>
+                <td>{day.disturbanceCount ?? '—'}</td>
+                <td>{day.sleepCycleCount ?? '—'}</td>
               </tr>
             ))}
           </tbody>
