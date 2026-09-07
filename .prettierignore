@@ -1,0 +1,12 @@
+node_modules
+.output
+.tanstack
+src/routeTree.gen.ts
+src/components/charts
+src/components/ui
+src/components/shimmering-text.tsx
+pnpm-lock.yaml
+artifacts
+test-results
+playwright-report
+.env*

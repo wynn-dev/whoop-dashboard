@@ -1,0 +1,27 @@
+# Local credentials; keep only the blank example in version control.
+.env
+.env.*
+!.env.example
+
+# Local health data and OAuth token storage.
+/data/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+
+# Dependencies, generated output, and local tooling.
+node_modules/
+dist/
+.output/
+.tanstack/
+.vinxi/
+.vite/
+coverage/
+artifacts/
+test-results/
+playwright-report/
+*.log
+.DS_Store
