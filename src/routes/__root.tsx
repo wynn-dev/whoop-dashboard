@@ -5,21 +5,23 @@ import {
   Scripts,
 } from '@tanstack/react-router'
 import '@fontsource-variable/manrope'
-import '@fontsource/dm-mono/400.css'
 import stylesheet from '../styles.css?url'
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'FORM — Your personal WHOOP dashboard' },
+      {
+        name: 'viewport',
+        content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+      },
+      { title: 'FORM' },
       {
         name: 'description',
         content:
-          'A clearer view of your recovery, sleep, and daily performance.',
+          'A private dashboard for your WHOOP recovery, sleep, and strain.',
       },
-      { name: 'theme-color', content: '#11130f' },
+      { name: 'theme-color', content: '#0f100e' },
       { name: 'robots', content: 'noindex, nofollow' },
     ],
     links: [{ rel: 'stylesheet', href: stylesheet }],
@@ -36,22 +38,17 @@ export const Route = createRootRoute({
     </html>
   ),
   notFoundComponent: () => (
-    <main className="p-12">
-      <h1 className="text-2xl">Page not found</h1>
-      <a className="text-primary underline" href="/">
-        Back to your dashboard
-      </a>
+    <main className="static-page">
+      <h1>Page not found</h1>
+      <p>There is nothing at this address.</p>
+      <a href="/">Back to your dashboard</a>
     </main>
   ),
   errorComponent: () => (
-    <main className="p-12">
-      <h1 className="text-2xl">Something went wrong</h1>
-      <p className="mt-3 text-muted-foreground">
-        Refresh the page to try again.
-      </p>
-      <a className="text-primary underline" href="/">
-        Reload dashboard
-      </a>
+    <main className="static-page">
+      <h1>Something went wrong</h1>
+      <p>Your data is safe. Reload to try again.</p>
+      <a href="/">Reload the dashboard</a>
     </main>
   ),
 })

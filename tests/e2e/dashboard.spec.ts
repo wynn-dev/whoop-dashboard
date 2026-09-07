@@ -47,31 +47,64 @@ test('demo charts, date ranges, navigation, and daily values work on desktop', a
   await page.setViewportSize({ width: 1440, height: 1100 })
   await page.goto('/')
   await expect(
-    page.getByRole('heading', { name: /Know your body/ }),
+    page.getByRole('heading', { name: /signals clearly/ }),
   ).toBeVisible()
   await page.screenshot({
     path: 'artifacts/welcome-desktop.png',
     fullPage: true,
   })
-  await page.getByRole('button', { name: 'Explore a demo' }).click()
-  await expect(page.getByText('DEMO DATA', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Explore the demo' }).click()
+  await expect(page.getByText('Demo data', { exact: true })).toBeVisible()
   await expect(
-    page.getByRole('heading', { name: 'Recovery trend', exact: true }),
+    page.getByRole('heading', { name: 'Recovery', exact: true }),
   ).toBeVisible()
   await expect(page.locator('.primary-trend svg path').first()).toBeVisible()
   await page.getByRole('tab', { name: '7 days', exact: true }).click()
   await expect(page.getByText('7 physiological days recorded')).toBeVisible()
-  const selected = await page
-    .getByRole('combobox', { name: 'Select physiological day' })
-    .inputValue()
+  const dayTrigger = page.getByRole('button', {
+    name: /Select physiological day/,
+  })
+  const selected = (await dayTrigger.textContent()) ?? ''
   await page.getByRole('button', { name: 'Previous day', exact: true }).click()
-  await expect(
-    page.getByRole('combobox', { name: 'Select physiological day' }),
-  ).not.toHaveValue(selected)
+  await expect(dayTrigger).not.toHaveText(selected)
   await page.getByRole('button', { name: 'Next day', exact: true }).click()
+  await expect(dayTrigger).toHaveText(selected)
+  await page.keyboard.press('ArrowLeft')
+  await expect(dayTrigger).not.toHaveText(selected)
+  await expect(page.getByRole('button', { name: 'Latest' })).toBeVisible()
+  await page.getByRole('button', { name: 'Latest' }).click()
+  await expect(page.getByText('Today', { exact: true })).toBeVisible()
+  // Calendar picker: recorded days carry a recovery dot, arrows move focus.
+  await dayTrigger.click()
+  const grid = page.getByRole('grid', { name: 'Choose a day' })
+  await expect(grid).toBeVisible()
+  await expect(grid.locator('[aria-selected="true"]')).toHaveCount(1)
+  await expect(grid.locator('.calendar-day i')).not.toHaveCount(0)
+  await expect(grid.locator('[aria-selected="true"]')).toBeFocused()
+  await page.keyboard.press('ArrowLeft')
+  await expect(grid.locator('[aria-selected="true"]')).not.toBeFocused()
+  await expect(grid).toBeVisible()
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('Enter')
+  await expect(grid).toBeHidden()
+  await expect(dayTrigger).not.toHaveText(selected)
+  await expect(dayTrigger).toBeFocused()
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('ArrowRight')
+  await expect(dayTrigger).toHaveText(selected)
   await page.getByRole('button', { name: 'Sleep', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Sleep quality', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Last night', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('meter', { name: 'Sleep need met' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Activity', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Daily strain', exact: true }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Recovery', exact: true }).click()
   await expect(
@@ -106,8 +139,8 @@ test('demo charts, date ranges, navigation, and daily values work on desktop', a
 test('mobile layout fits without horizontal scrolling', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
-  await page.getByRole('button', { name: 'Explore a demo' }).click()
-  await expect(page.getByText('DEMO DATA', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Explore the demo' }).click()
+  await expect(page.getByText('Demo data', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Sleep', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Sleep quality', exact: true }),
