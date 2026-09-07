@@ -29,6 +29,27 @@ the `dev` script, both URL settings below, and the WHOOP callback registration.
 Use the configured `APP_URL` for OAuth so the state cookie returns to the
 same hostname.
 
+## Deploying to Vercel
+
+The build is zero-config: when Vercel runs `pnpm build`, Nitro detects the
+platform and writes the Build Output API directory (`.vercel/output`)
+instead of `.output/`, so no Output Directory setting is needed. `/api/sync`
+and `/api/mcp` request the plan's maximum function duration because a
+90-day reconcile pages through WHOOP with rate-limit pauses.
+
+1. Add every variable from `.env.example` to the project's Environment
+   Variables. `APP_URL` and `WHOOP_REDIRECT_URI` must use the deployment's
+   HTTPS origin, and that redirect URI must be registered in the WHOOP
+   Developer Dashboard. Set `MCP_BEARER_TOKEN` only if you want the MCP
+   endpoint on.
+2. Run `pnpm db:migrate` once against the production database from your
+   machine.
+3. Deploy. Sessions and OAuth cookies are marked `Secure` automatically
+   because the origin is HTTPS.
+
+Nothing syncs while no browser has the dashboard open; see “Features and
+data behavior”.
+
 ## Environment setup
 
 1. Copy `.env.example` to `.env.local`.
