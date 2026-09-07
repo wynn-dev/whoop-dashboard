@@ -16,6 +16,7 @@
 node_modules/
 dist/
 .output/
+.vercel/
 .tanstack/
 .vinxi/
 .vite/
