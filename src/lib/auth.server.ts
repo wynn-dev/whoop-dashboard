@@ -8,6 +8,7 @@ import { sealData, unsealData } from 'iron-session'
 import { db } from './db.server'
 import { env } from './env.server'
 import { hashToken, randomToken } from './crypto.server'
+import { normalizeEmail } from './allowlist'
 
 const SESSION_COOKIE = 'form-session'
 const OAUTH_COOKIE = 'form-oauth'
@@ -76,7 +77,7 @@ export async function currentUserId() {
   const [session] = await db()`select s.user_id from whoop_dashboard.sessions s
     join whoop_dashboard.connections c on c.user_id = s.user_id
     where s.token_hash = ${hashToken(token)} and s.expires_at > now()
-      and lower(c.email) = ${env().WHOOP_ALLOWED_EMAIL.trim().toLowerCase()}`
+      and lower(trim(c.email)) = ${normalizeEmail(env().WHOOP_ALLOWED_EMAIL)}`
   return session ? String(session.user_id) : null
 }
 

@@ -47,7 +47,7 @@ test('demo charts, date ranges, navigation, and daily values work on desktop', a
   await page.setViewportSize({ width: 1440, height: 1100 })
   await page.goto('/')
   await expect(
-    page.getByRole('heading', { name: /signals clearly/ }),
+    page.getByRole('heading', { name: /kept to yourself/ }),
   ).toBeVisible()
   await page.screenshot({
     path: 'artifacts/welcome-desktop.png',

@@ -28,9 +28,9 @@ export function standardDeviation(values: number[]) {
 // ---------------------------------------------------------------------------
 // Week in review: 7 days through the selected day against the 7 before.
 // ---------------------------------------------------------------------------
-type NumericKey = 'recovery' | 'sleepHours' | 'strain' | 'hrv' | 'rhr'
+export type MetricKey = 'recovery' | 'sleepHours' | 'strain' | 'hrv' | 'rhr'
 export interface WeekMetric {
-  key: NumericKey
+  key: MetricKey
   label: string
   better: Direction
   current: number | null
@@ -43,7 +43,7 @@ export function weekInReview(days: DailyStats[], end: string) {
   const current = daysThrough(days, end, 7)
   const previous = daysThrough(days, shiftDate(end, -7), 7)
   const metric = (
-    key: NumericKey,
+    key: MetricKey,
     label: string,
     better: Direction,
   ): WeekMetric => ({
@@ -319,4 +319,53 @@ export function sportBreakdown(workouts: WhoopRecord[]) {
   return [...groups]
     .map(([sport, members]) => ({ sport, ...volume(members) }))
     .sort((a, b) => b.hours - a.hours || b.sessions - a.sessions)
+}
+
+// ---------------------------------------------------------------------------
+// Weekday pattern and streaks.
+// ---------------------------------------------------------------------------
+export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const weekdayIndex = (date: string) =>
+  (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7
+
+export function byWeekday(days: DailyStats[], key: MetricKey) {
+  return WEEKDAYS.map((label, index) => {
+    const members = days.filter(
+      (day) => weekdayIndex(day.date) === index && day[key] != null,
+    )
+    return {
+      label,
+      count: members.length,
+      average: mean(members.map((day) => day[key])),
+    }
+  })
+}
+
+// A streak counts consecutive calendar days; a missing day breaks it.
+export function streak(
+  days: DailyStats[],
+  end: string,
+  test: (day: DailyStats) => boolean,
+) {
+  const byDate = new Map(days.map((day) => [day.date, day]))
+  let current = 0
+  for (let date = end; ; date = shiftDate(date, -1)) {
+    const day = byDate.get(date)
+    if (!day || !test(day)) break
+    current++
+  }
+  let longest = 0
+  let run = 0
+  let previous: string | null = null
+  for (const day of [...days].sort((a, b) => a.date.localeCompare(b.date))) {
+    run =
+      test(day) && (previous === null || shiftDate(previous, 1) === day.date)
+        ? run + 1
+        : test(day)
+          ? 1
+          : 0
+    longest = Math.max(longest, run)
+    previous = day.date
+  }
+  return { current, longest }
 }

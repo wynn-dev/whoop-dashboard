@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { MoveDownRight, MoveUpRight } from 'lucide-react'
 import {
+  byWeekday,
   clockFromNight,
   enoughVariety,
   loadLabel,
@@ -11,15 +12,22 @@ import {
   sleepBalance,
   sleepTiming,
   sportBreakdown,
+  streak,
   trainingLoad,
   volume,
   weekInReview,
   workoutsThrough,
   type Bucket,
   type Direction,
+  type MetricKey,
   type WeekMetric,
 } from '@/lib/insights'
-import { duration, type DailyStats, type WhoopRecord } from '@/lib/whoop'
+import {
+  duration,
+  shiftDate,
+  type DailyStats,
+  type WhoopRecord,
+} from '@/lib/whoop'
 import { palette, recoveryTone } from '@/lib/palette'
 import { cn } from '@/lib/utils'
 
@@ -156,15 +164,46 @@ export function WeekReview({
   )
 }
 
-export function RecoveryMix({
+const weekdayOf = (date: string) =>
+  (new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7
+const longDate = (date: string) =>
+  new Date(`${date}T12:00:00`).toLocaleDateString('en', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+
+export function RecoveryHeatmap({
   days,
+  current,
+  end,
   range,
+  onSelect,
 }: {
   days: DailyStats[]
+  current: DailyStats | undefined
+  end: string
   range: number
+  onSelect: (cycleId: string) => void
 }) {
   const mix = recoveryMix(days)
-  const segments = [
+  const byDate = new Map(days.map((day) => [day.date, day]))
+  const first = shiftDate(end, 1 - range)
+  const start = shiftDate(first, -weekdayOf(first))
+  const weeks: string[][] = []
+  for (let date = start; date <= end; date = shiftDate(date, 1)) {
+    if (weekdayOf(date) === 0 || !weeks.length) weeks.push([])
+    weeks.at(-1)!.push(date)
+  }
+  const monthLabels = weeks.map((week, index) =>
+    index === 0 || week[0].slice(0, 7) !== weeks[index - 1][0].slice(0, 7)
+      ? new Date(`${week[week.length - 1]}T12:00:00`).toLocaleDateString('en', {
+          month: 'short',
+        })
+      : '',
+  )
+  const highStreak = streak(days, end, (day) => (day.recovery ?? 0) >= 67)
+  const legend = [
     { label: 'High', count: mix.high, color: recoveryTone(80).color },
     { label: 'Moderate', count: mix.moderate, color: recoveryTone(50).color },
     { label: 'Low', count: mix.low, color: recoveryTone(20).color },
@@ -173,27 +212,57 @@ export function RecoveryMix({
   return (
     <section className="panel">
       <Heading
-        title="Recovery mix"
+        title="Recovery, day by day"
         description={`${mix.scored} scored ${mix.scored === 1 ? 'day' : 'days'} in the last ${range}`}
       />
       {mix.total ? (
-        <div className="mix">
-          <div
-            className="mix-bar"
-            role="img"
-            aria-label={segments
-              .map((segment) => `${segment.label} ${segment.count}`)
-              .join(', ')}
-          >
-            {segments.map((segment) => (
-              <span
-                key={segment.label}
-                style={{ flexGrow: segment.count, background: segment.color }}
-              />
-            ))}
+        <div className="heat-wrap">
+          <div className="heat" data-dense={range > 35 || undefined}>
+            <div className="heat-weekdays" aria-hidden="true">
+              {['Mon', '', 'Wed', '', 'Fri', '', 'Sun'].map((label, i) => (
+                <span key={i}>{label}</span>
+              ))}
+            </div>
+            <div
+              className="heat-grid"
+              role="group"
+              aria-label="Recovery by day"
+            >
+              <div className="heat-months" aria-hidden="true">
+                {monthLabels.map((label, index) => (
+                  <span key={index}>{label}</span>
+                ))}
+              </div>
+              <div className="heat-weeks">
+                {weeks.map((week, index) => (
+                  <div className="heat-week" key={index}>
+                    {week.map((date) => {
+                      const day = byDate.get(date)
+                      if (date < first || date > end)
+                        return <span className="heat-cell outside" key={date} />
+                      if (!day) return <span className="heat-cell" key={date} />
+                      const tone = recoveryTone(day.recovery)
+                      const selected = day.cycleId === current?.cycleId
+                      return (
+                        <button
+                          key={date}
+                          className="heat-cell"
+                          data-selected={selected || undefined}
+                          style={{ background: tone.color }}
+                          aria-label={`${longDate(date)}, ${day.recovery == null ? 'not scored' : `recovery ${Math.round(day.recovery)}%`}`}
+                          aria-pressed={selected}
+                          title={`${longDate(date)} · ${day.recovery == null ? 'Not scored' : `${Math.round(day.recovery)}% ${tone.label.toLowerCase()}`}`}
+                          onClick={() => onSelect(day.cycleId)}
+                        />
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
           <ul className="mix-legend">
-            {segments.map((segment) => (
+            {legend.map((segment) => (
               <li key={segment.label}>
                 <i style={{ background: segment.color }} />
                 <span>{segment.label}</span>
@@ -207,7 +276,105 @@ export function RecoveryMix({
         <p className="empty">No days in this period yet.</p>
       )}
       <div className="panel-foot">
-        <span>WHOOP zones: high is 67% or more, low is under 34%</span>
+        <span>
+          {highStreak.current
+            ? `${highStreak.current} ${highStreak.current === 1 ? 'day' : 'days'} high in a row`
+            : 'No current high-recovery streak'}
+          {highStreak.longest > 1 ? ` · longest ${highStreak.longest}` : ''}
+        </span>
+        <span>Tap a day to open it</span>
+      </div>
+    </section>
+  )
+}
+
+const weekdayMetrics: Record<
+  'recovery' | 'strain' | 'sleepHours',
+  { title: string; color: string; format: (value: number) => string }
+> = {
+  recovery: {
+    title: 'Recovery by weekday',
+    color: palette.recovery,
+    format: (v) => `${Math.round(v)}%`,
+  },
+  strain: {
+    title: 'Strain by weekday',
+    color: palette.strain,
+    format: (v) => v.toFixed(1),
+  },
+  sleepHours: {
+    title: 'Time asleep by weekday',
+    color: palette.sleep,
+    format: duration,
+  },
+}
+
+export function WeekdayPattern({
+  days,
+  current,
+  metric,
+  range,
+}: {
+  days: DailyStats[]
+  current: DailyStats | undefined
+  metric: keyof typeof weekdayMetrics
+  range: number
+}) {
+  const { title, color, format } = weekdayMetrics[metric]
+  const pattern = byWeekday(days, metric as MetricKey)
+  const scored = pattern.reduce((sum, item) => sum + item.count, 0)
+  const enough = range >= 14 && pattern.every((item) => item.count >= 2)
+  const max = Math.max(...pattern.map((item) => item.average ?? 0), 0)
+  const today = current ? weekdayOf(current.date) : -1
+  return (
+    <section className="panel">
+      <Heading
+        title={title}
+        description={`Average across ${scored} scored ${scored === 1 ? 'day' : 'days'} in the last ${range}`}
+      />
+      {enough ? (
+        <div
+          className="weekdays"
+          role="img"
+          aria-label={pattern
+            .map(
+              (item) =>
+                `${item.label} ${item.average == null ? 'no data' : format(item.average)}`,
+            )
+            .join(', ')}
+        >
+          {pattern.map((item, index) => (
+            <div
+              className="weekday"
+              key={item.label}
+              data-selected={index === today || undefined}
+              title={`${item.label}: ${item.average == null ? 'no data' : format(item.average)} over ${item.count} days`}
+            >
+              <span className="weekday-value">
+                {item.average == null ? '—' : format(item.average)}
+              </span>
+              <span className="weekday-track">
+                <span
+                  style={{
+                    height: `${max ? ((item.average ?? 0) / max) * 100 : 0}%`,
+                    background: color,
+                  }}
+                />
+              </span>
+              <span className="weekday-label">{item.label}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="empty">
+          Weekday patterns need at least two weeks with every weekday scored
+          twice. Try the 30- or 90-day view.
+        </p>
+      )}
+      <div className="panel-foot">
+        <span>
+          Same weekday, averaged. A pattern here is descriptive, not a rule.
+        </span>
       </div>
     </section>
   )
