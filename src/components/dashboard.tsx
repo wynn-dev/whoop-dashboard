@@ -65,6 +65,14 @@ import { DayPicker } from './day-picker'
 import { HealthMonitor } from './health-monitor'
 import { SleepDetails } from './sleep-details'
 import { DailyHeartRate, WorkoutDetails } from './workout-details'
+import {
+  RecoveryDrivers,
+  RecoveryMix,
+  SleepTiming,
+  SportBreakdown,
+  TrainingLoad,
+  WeekReview,
+} from './insights'
 import { cn } from '@/lib/utils'
 
 type Section = 'overview' | 'recovery' | 'sleep' | 'activity' | 'health'
@@ -208,6 +216,9 @@ export function Dashboard() {
     if (canStep(delta)) setSelectedDate(allDays[currentIndex + delta].cycleId)
   }
   const syncing = sync.isPending || !!data?.syncing
+  const allWorkouts = (data?.records ?? [])
+    .filter((r) => r.kind === 'workout' && r.data.start)
+    .map((r) => r.data)
   const workouts = (data?.records ?? [])
     .filter(
       (r) =>
@@ -733,29 +744,56 @@ export function Dashboard() {
                   </div>
 
                   {section === 'recovery' ? (
-                    <div className="grid-secondary">
-                      <section className="panel">
-                        <PanelHeading
-                          title="Heart rate variability"
-                          description="Your readings over time; explore personal comparisons in Health"
+                    <>
+                      <div className="grid-secondary single">
+                        <RecoveryDrivers
+                          allDays={allDays}
+                          days={days}
+                          range={range}
                         />
-                        <TrendChart days={days} metric="hrv" height={200} />
-                      </section>
-                      <section className="panel">
-                        <PanelHeading
-                          title="Resting heart rate"
-                          description="Your readings over time; explore personal comparisons in Health"
-                        />
-                        <TrendChart days={days} metric="rhr" height={200} />
-                      </section>
-                    </div>
+                      </div>
+                      <div className="grid-secondary">
+                        <section className="panel">
+                          <PanelHeading
+                            title="Heart rate variability"
+                            description="Your readings over time; explore personal comparisons in Health"
+                          />
+                          <TrendChart days={days} metric="hrv" height={200} />
+                        </section>
+                        <section className="panel">
+                          <PanelHeading
+                            title="Resting heart rate"
+                            description="Your readings over time; explore personal comparisons in Health"
+                          />
+                          <TrendChart days={days} metric="rhr" height={200} />
+                        </section>
+                      </div>
+                    </>
                   ) : section === 'sleep' ? (
-                    <div className="grid-secondary">
-                      <NightPanel day={current} />
-                      <SleepBreakdownPanel days={days} />
-                    </div>
+                    <>
+                      <div className="grid-secondary">
+                        <NightPanel day={current} />
+                        <SleepBreakdownPanel days={days} />
+                      </div>
+                      <div className="grid-secondary single">
+                        <SleepTiming
+                          days={days}
+                          current={current}
+                          end={periodEnd}
+                          range={range}
+                        />
+                      </div>
+                    </>
                   ) : section === 'activity' ? (
                     <>
+                      <div className="grid-secondary">
+                        <TrainingLoad
+                          allDays={allDays}
+                          end={periodEnd}
+                          workouts={allWorkouts}
+                        />
+                        <SportBreakdown workouts={workouts} range={range} />
+                      </div>
                       <div className="grid-secondary">
                         <DailyHeartRate day={current} />
                         <WorkoutsPanel
@@ -773,15 +811,21 @@ export function Dashboard() {
                       </div>
                     </>
                   ) : (
-                    <div className="grid-secondary">
-                      <SleepBreakdownPanel days={days} />
-                      <WorkoutsPanel
-                        workouts={workouts}
-                        range={range}
-                        limit={3}
-                        onViewAll={() => setSection('activity')}
-                      />
-                    </div>
+                    <>
+                      <div className="grid-secondary">
+                        <WeekReview allDays={allDays} end={periodEnd} />
+                        <RecoveryMix days={days} range={range} />
+                      </div>
+                      <div className="grid-secondary">
+                        <SleepBreakdownPanel days={days} />
+                        <WorkoutsPanel
+                          workouts={workouts}
+                          range={range}
+                          limit={3}
+                          onViewAll={() => setSection('activity')}
+                        />
+                      </div>
+                    </>
                   )}
                   {section === 'sleep' && (
                     <SleepDetails day={current} records={data.records} />

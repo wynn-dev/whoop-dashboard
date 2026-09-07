@@ -17,7 +17,10 @@ export function demoDashboard(): DashboardData {
     const strain =
       i === 0 ? 12.4 : Math.round((10 + 5 * Math.sin(i * 1.2)) * 10) / 10
     const sleepHours = i === 0 ? 7.7 : 7.2 + 1.1 * Math.sin(i * 0.6)
-    const start = new Date(day + 5 * 3_600_000).toISOString()
+    // Wake time drifts a little from night to night so timing charts have
+    // something to show; 05:00 UTC is 07:00 in the demo timezone.
+    const wakeHour = i === 0 ? 5 : 5 + 0.35 * Math.sin(i * 1.9)
+    const start = new Date(day + wakeHour * 3_600_000).toISOString()
     records.push({
       kind: 'cycle',
       data: {
@@ -56,7 +59,9 @@ export function demoDashboard(): DashboardData {
       data: {
         id: sleepId,
         cycle_id: cycleId,
-        start: new Date(day + (5 - sleepHours - 0.4) * 3_600_000).toISOString(),
+        start: new Date(
+          day + (wakeHour - sleepHours - 0.4) * 3_600_000,
+        ).toISOString(),
         end: start,
         nap: false,
         timezone_offset: '+02:00',
@@ -113,8 +118,10 @@ export function demoDashboard(): DashboardData {
         data: {
           id: `demo-workout-${i}`,
           start: new Date(day + 9 * 3_600_000).toISOString(),
-          end: new Date(day + 9.75 * 3_600_000).toISOString(),
-          sport_name: ['running', 'weightlifting', 'cycling'][i % 3],
+          end: new Date(
+            day + (9 + [0.75, 1, 1.5][i % 3]) * 3_600_000,
+          ).toISOString(),
+          sport_name: ['running', 'weightlifting', 'cycling'][(i % 4) % 3],
           timezone_offset: '+02:00',
           score_state: 'SCORED',
           score: {

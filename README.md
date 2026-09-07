@@ -59,6 +59,12 @@ not need to paste an access token into the environment file.
 - The selected physiological day is the page heading. Step days with the
   arrows, the left/right keyboard keys, or the day picker; **Latest** jumps
   back to the newest day.
+- Insights computed only from your own days: a week-in-review against the
+  week before, the recovery mix of a period, average recovery grouped by the
+  previous night's sleep and the previous day's strain, a sleep-timing chart
+  with bedtime and wake spread and a 7-night balance against need, 7-day vs
+  28-day training load, and a by-sport breakdown. All descriptive, never
+  prescriptive.
 - Day tiles for recovery, strain, and sleep; signals compared with your own
   range average; a last-night panel with bedtime, sleep need, and stages;
   sleep-stage and HRV/RHR trends; workout details; and an accessible

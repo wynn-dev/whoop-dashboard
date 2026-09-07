@@ -109,30 +109,34 @@ const hours = (value: unknown) => {
   return n === null ? null : n / 3_600_000
 }
 
-// Use the recorded offset, not the browser's timezone or UTC midnight.
-export function localDate(iso: string, offset = '+00:00'): string {
+// Minutes east of UTC for a WHOOP offset such as "+02:00".
+export function offsetMinutes(offset = '+00:00') {
   const match = /^([+-])(\d{2}):(\d{2})$/.exec(offset)
-  const minutes = match
+  return match
     ? (Number(match[2]) * 60 + Number(match[3])) * (match[1] === '-' ? -1 : 1)
     : 0
-  return new Date(new Date(iso).getTime() + minutes * 60_000)
-    .toISOString()
-    .slice(0, 10)
+}
+const shiftedToLocal = (iso: string, offset?: string) =>
+  new Date(new Date(iso).getTime() + offsetMinutes(offset) * 60_000)
+
+// Use the recorded offset, not the browser's timezone or UTC midnight.
+export function localDate(iso: string, offset = '+00:00'): string {
+  return shiftedToLocal(iso, offset).toISOString().slice(0, 10)
 }
 
 // Wall-clock time in the recorded timezone, e.g. "11:42 PM".
 export function localTime(iso: string, offset = '+00:00'): string {
-  const match = /^([+-])(\d{2}):(\d{2})$/.exec(offset)
-  const minutes = match
-    ? (Number(match[2]) * 60 + Number(match[3])) * (match[1] === '-' ? -1 : 1)
-    : 0
-  return new Date(
-    new Date(iso).getTime() + minutes * 60_000,
-  ).toLocaleTimeString('en', {
+  return shiftedToLocal(iso, offset).toLocaleTimeString('en', {
     hour: 'numeric',
     minute: '2-digit',
     timeZone: 'UTC',
   })
+}
+
+// Minutes since local midnight in the recorded timezone.
+export function localMinutes(iso: string, offset = '+00:00'): number {
+  const local = shiftedToLocal(iso, offset)
+  return local.getUTCHours() * 60 + local.getUTCMinutes()
 }
 
 export function buildDailyStats(records: StoredRecord[]): DailyStats[] {

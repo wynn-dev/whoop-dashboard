@@ -1,0 +1,325 @@
+/* Insight panels: week in review, recovery mix and drivers, sleep timing,
+   training load, and the by-sport table. */
+
+.review-list {
+  padding: 4px 20px 8px;
+}
+.review-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) auto minmax(0, 1.4fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.review-list li:last-child {
+  border-bottom: 0;
+}
+.review-label {
+  color: var(--ink-2);
+}
+.review-list strong {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.review-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.review-delta.good svg {
+  color: var(--good);
+}
+.review-delta.watch svg {
+  color: var(--watch);
+}
+.review-previous {
+  text-align: right;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.review-previous small {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.mix {
+  padding: 18px 20px 20px;
+}
+.mix-bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.mix-bar span {
+  display: block;
+  min-width: 2px;
+}
+.mix-legend {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.mix-legend li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.mix-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.mix-legend strong {
+  grid-column: 2;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.mix-legend small {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.driver-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 32px;
+  padding: 16px 20px 12px;
+}
+.driver-group h4 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.driver-group > p {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin: 2px 0 6px;
+}
+.driver-group .empty {
+  padding: 12px 0 16px;
+}
+.buckets li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.buckets li:last-child {
+  border-bottom: 0;
+}
+.buckets li.thin {
+  opacity: 0.55;
+}
+.bucket-label {
+  font-size: 13px;
+}
+.bucket-label small {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.bucket-track {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.bucket-track span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+.buckets strong {
+  min-width: 40px;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.timing-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-bottom: 8px;
+}
+.timing {
+  padding: 8px 20px 20px;
+}
+.timing-axis {
+  position: relative;
+  height: 18px;
+  margin-bottom: 4px;
+}
+.timing-axis span {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.timing-axis span:first-child {
+  transform: none;
+}
+.timing-axis span:last-child {
+  transform: translateX(-100%);
+}
+.timing-rows {
+  position: relative;
+  padding-top: 2px;
+}
+.timing-grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.timing-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--ink-3);
+  opacity: 0.8;
+}
+.timing-row {
+  position: relative;
+}
+.timing-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 2px;
+  background: var(--c-sleep);
+  opacity: 0.55;
+}
+.timing-row[data-selected] .timing-bar {
+  opacity: 1;
+  box-shadow: 0 0 0 1px var(--ink);
+}
+.timing-row:hover .timing-bar {
+  opacity: 0.9;
+}
+
+.load-stats {
+  padding-bottom: 20px;
+}
+.load-trend,
+.load-week {
+  font-size: 18px !important;
+}
+
+.table-scroll.flush {
+  border: 0;
+  border-radius: 0;
+  margin: 8px 0 0;
+}
+.sport-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+.sport-table th,
+.sport-table td {
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  font-weight: 400;
+}
+.sport-table thead th {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+.sport-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.sport-table tbody th {
+  width: 40%;
+}
+.sport-table td {
+  font-variant-numeric: tabular-nums;
+}
+.sport-name {
+  display: block;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.sport-share {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.sport-share span {
+  display: block;
+  height: 100%;
+  background: var(--c-strain);
+  border-radius: 2px;
+}
+
+@media (max-width: 760px) {
+  .review-list li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'label previous'
+      'value delta';
+    row-gap: 2px;
+  }
+  .review-label {
+    grid-area: label;
+  }
+  .review-list strong {
+    grid-area: value;
+  }
+  .review-delta {
+    grid-area: delta;
+    justify-self: end;
+  }
+  .review-previous {
+    grid-area: previous;
+  }
+  .review-previous small {
+    display: inline;
+    margin-left: 4px;
+  }
+  .mix-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .driver-groups {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .timing-stats {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .timing-axis span:nth-child(even) {
+    display: none;
+  }
+  .sport-table th,
+  .sport-table td {
+    padding-inline: 12px;
+  }
+}
