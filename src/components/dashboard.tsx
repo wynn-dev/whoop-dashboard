@@ -20,6 +20,7 @@ import {
   RefreshCw,
   ShieldCheck,
   ScanHeart,
+  Sparkles,
   X,
   type LucideIcon,
 } from 'lucide-react'
@@ -65,6 +66,7 @@ import { DayPicker } from './day-picker'
 import { HealthMonitor } from './health-monitor'
 import { SleepDetails } from './sleep-details'
 import { DailyHeartRate, WorkoutDetails } from './workout-details'
+import { InsightsSection } from './insights-section'
 import {
   RecoveryDrivers,
   RecoveryHeatmap,
@@ -76,13 +78,15 @@ import {
 } from './insights'
 import { cn } from '@/lib/utils'
 
-type Section = 'overview' | 'recovery' | 'sleep' | 'activity' | 'health'
+type Section =
+  'overview' | 'recovery' | 'sleep' | 'activity' | 'health' | 'insights'
 const sections: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutGrid },
   { id: 'health', label: 'Health', icon: ScanHeart },
   { id: 'recovery', label: 'Recovery', icon: HeartPulse },
   { id: 'sleep', label: 'Sleep', icon: Moon },
   { id: 'activity', label: 'Activity', icon: Activity },
+  { id: 'insights', label: 'Insights', icon: Sparkles },
 ]
 const primaryMetric: Record<Section, TrendMetric> = {
   overview: 'recovery',
@@ -90,6 +94,7 @@ const primaryMetric: Record<Section, TrendMetric> = {
   sleep: 'sleepHours',
   activity: 'strain',
   health: 'hrv',
+  insights: 'recovery',
 }
 const authErrors: Record<string, string> = {
   invalid_state: 'Your connection request expired. Please connect again.',
@@ -482,7 +487,7 @@ export function Dashboard() {
               )}
             </div>
 
-            {section !== 'health' && (
+            {section !== 'health' && section !== 'insights' && (
               <div className="tiles">
                 <Tile
                   label="Recovery"
@@ -535,7 +540,13 @@ export function Dashboard() {
             )}
 
             <div className="section-row" ref={trendsRef}>
-              <h2>{section === 'health' ? 'Health Monitor' : 'Trends'}</h2>
+              <h2>
+                {section === 'health'
+                  ? 'Health Monitor'
+                  : section === 'insights'
+                    ? 'Insights'
+                    : 'Trends'}
+              </h2>
               <Tabs
                 value={String(range)}
                 onValueChange={(value) => setRange(Number(value))}
@@ -553,6 +564,22 @@ export function Dashboard() {
             <div className="section-body" key={section}>
               {section === 'health' ? (
                 <HealthMonitor days={allDays} current={current} range={range} />
+              ) : section === 'insights' ? (
+                <InsightsSection
+                  allDays={allDays}
+
+                  days={days}
+
+                  current={current}
+
+                  end={periodEnd}
+
+                  range={range}
+
+                  workouts={workouts}
+
+                  records={data.records}
+                />
               ) : (
                 <>
                   <div className="grid-main">
@@ -860,7 +887,9 @@ export function Dashboard() {
                 </>
               )}
             </div>
-            {section !== 'health' && <DailyTable days={days} />}
+            {section !== 'health' && section !== 'insights' && (
+              <DailyTable days={days} />
+            )}
             <footer className="page-foot">
               {preview
                 ? 'Illustrative demo. Not real health data.'

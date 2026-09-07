@@ -65,6 +65,15 @@ not need to paste an access token into the environment file.
   with bedtime and wake spread and a 7-night balance against need, 7-day vs
   28-day training load, and a by-sport breakdown. All descriptive, never
   prescriptive.
+- An Insights tab with deeper, gated analysis: Spearman relationships with
+  95% intervals (20+ paired days), unusual nights where two or more signals
+  leave their own 30-day robust range, an HRV readiness band on log HRV
+  (7-day geometric mean vs 28-day mean ± 0.5 SD), month-against-month
+  medians, day-to-day stability, rolling sleep balance, sleep architecture,
+  regularity and social jetlag, nap and evening-session comparisons,
+  bounce-back time, hard-day sequences, Foster monotony, time in HR zones,
+  the morning after by sport, highlights, and data coverage. Every panel
+  states its sample and explains its method inline.
 - Day tiles for recovery, strain, and sleep; signals compared with your own
   range average; a last-night panel with bedtime, sleep need, and stages;
   sleep-stage and HRV/RHR trends; workout details; and an accessible
@@ -118,6 +127,62 @@ and [continuous-heart-rate FAQ](https://developer.whoop.com/docs/developing/supp
 All additional sleep/workout fields are read from the existing stored JSON
 records. No new database migration, scopes, or external integration is required.
 Optional fields display a dash when unavailable; a real zero remains zero.
+
+## MCP server for AI agents
+
+FORM can expose your data to an AI agent over the
+[Model Context Protocol](https://modelcontextprotocol.io) at `/api/mcp`
+(Streamable HTTP, stateless, JSON responses). It is switched off until you
+set a token:
+
+```sh
+openssl rand -hex 32   # paste the result into .env.local as MCP_BEARER_TOKEN
+```
+
+Every request must carry `Authorization: Bearer <token>`; anything else gets
+`401`, and an unset token gets `503`. The token is compared in constant time.
+The server reads the single allowed account only, so the allowlist still
+governs whose data an agent can see.
+
+Connect from Claude Code:
+
+```sh
+claude mcp add --transport http form http://localhost:3001/api/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+Or in any client that accepts a JSON config:
+
+```json
+{
+  "mcpServers": {
+    "form": {
+      "type": "http",
+      "url": "http://localhost:3001/api/mcp",
+      "headers": { "Authorization": "Bearer <token>" }
+    }
+  }
+}
+```
+
+The surface is deliberately small so it does not crowd an agent's context:
+eight tools, two resources, one prompt. Tools return compact, rounded JSON
+with output schemas, hard row caps, a `fields` picker, and pagination.
+
+| Tool                            | What it returns                                                                        |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| `get_status`                    | Connection, last sync, data span, latest headline numbers. Call first.                 |
+| `get_day`                       | One physiological day in full; optional workouts, naps, Health Monitor comparisons.    |
+| `list_days`                     | Up to 90 rows with only the fields you ask for.                                        |
+| `list_workouts` / `get_workout` | Paginated workout rows; one workout with zones, elevation, next morning.               |
+| `get_trends`                    | Averages, week vs week, month vs month, recovery mix, training load, weekday averages. |
+| `get_insights`                  | The Insights tab as data, filterable by `topics`, each with sample size and `ready`.   |
+| `sync_now`                      | The only write: starts the same 90-day reconcile the dashboard runs.                   |
+
+Resources `whoop://status` and `whoop://days/{date}` mirror the first two
+tools; the `weekly_review` prompt asks for a short, honest week-over-week
+review. All insight output carries the same caveat as the dashboard: it is
+descriptive, not a diagnosis or a training plan.
 
 ## Authentication and storage
 

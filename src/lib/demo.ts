@@ -19,7 +19,12 @@ export function demoDashboard(): DashboardData {
     const sleepHours = i === 0 ? 7.7 : 7.2 + 1.1 * Math.sin(i * 0.6)
     // Wake time drifts a little from night to night so timing charts have
     // something to show; 05:00 UTC is 07:00 in the demo timezone.
-    const wakeHour = i === 0 ? 5 : 5 + 0.35 * Math.sin(i * 1.9)
+    const weekend = [0, 6].includes(new Date(day).getUTCDay())
+    const wakeHour =
+      i === 0 ? 5 : 5 + 0.35 * Math.sin(i * 1.9) + (weekend ? 0.9 : 0)
+    // One night where several signals move together, to show the
+    // unusual-nights view. Recovery is 'scored' but not tied to it.
+    const offNight = i === 9
     const start = new Date(day + wakeHour * 3_600_000).toISOString()
     records.push({
       kind: 'cycle',
@@ -45,12 +50,18 @@ export function demoDashboard(): DashboardData {
         score: {
           user_calibrating: i >= 86,
           recovery_score: recovery,
-          hrv_rmssd_milli: i === 0 ? 72 : 58 + 16 * Math.sin(i * 0.5),
+          hrv_rmssd_milli:
+            i === 0 ? 72 : 58 + 16 * Math.sin(i * 0.5) - (offNight ? 22 : 0),
           resting_heart_rate:
-            i === 0 ? 52 : Math.round(55 + 5 * Math.cos(i * 0.3)),
+            i === 0
+              ? 52
+              : Math.round(55 + 5 * Math.cos(i * 0.3)) + (offNight ? 9 : 0),
           spo2_percentage:
             i === 12 ? undefined : 97.4 + 0.5 * Math.sin(i * 0.6),
-          skin_temp_celsius: i === 0 ? 33.8 : 33.5 + 0.2 * Math.sin(i * 0.4),
+          skin_temp_celsius:
+            i === 0
+              ? 33.8
+              : 33.5 + 0.2 * Math.sin(i * 0.4) + (offNight ? 0.7 : 0),
         },
       },
     })
@@ -71,7 +82,8 @@ export function demoDashboard(): DashboardData {
             i === 0 ? 94 : Math.min(100, Math.round((sleepHours / 8.2) * 100)),
           sleep_efficiency_percentage: 95,
           sleep_consistency_percentage: 87,
-          respiratory_rate: 14.2 + 0.3 * Math.sin(i * 0.8),
+          respiratory_rate:
+            14.2 + 0.3 * Math.sin(i * 0.8) + (offNight ? 1.6 : 0),
           stage_summary: {
             total_in_bed_time_milli: (sleepHours + 0.4) * 3_600_000,
             total_no_data_time_milli: 0,
@@ -117,9 +129,13 @@ export function demoDashboard(): DashboardData {
         kind: 'workout',
         data: {
           id: `demo-workout-${i}`,
-          start: new Date(day + 9 * 3_600_000).toISOString(),
+          // Most sessions late morning; every fifth one in the evening.
+          start: new Date(
+            day + (i % 5 === 1 ? 17.5 : 9) * 3_600_000,
+          ).toISOString(),
           end: new Date(
-            day + (9 + [0.75, 1, 1.5][i % 3]) * 3_600_000,
+            day +
+              ((i % 5 === 1 ? 17.5 : 9) + [0.75, 1, 1.5][i % 3]) * 3_600_000,
           ).toISOString(),
           sport_name: ['running', 'weightlifting', 'cycling'][(i % 4) % 3],
           timezone_offset: '+02:00',

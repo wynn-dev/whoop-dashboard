@@ -54,7 +54,15 @@ export const healthMetrics = [
   },
 ] as const
 export type HealthMetricKey = (typeof healthMetrics)[number]['key']
-export type HealthMetric = (typeof healthMetrics)[number]
+export interface HealthMetric {
+  key: string
+  label: string
+  short: string
+  unit: string
+  decimals: number
+  description: string
+  source: string
+}
 export type ReadingStatus =
   'missing' | 'calibrating' | 'building' | 'within' | 'above' | 'below'
 

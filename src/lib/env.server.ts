@@ -11,6 +11,12 @@ const schema = z.object({
   SESSION_SECRET: z.string().min(32),
   TOKEN_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/),
   DATABASE_URL: z.string().regex(/^postgres(?:ql)?:\/\//),
+  // Optional. When set, /api/mcp accepts requests carrying this bearer token.
+  MCP_BEARER_TOKEN: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() ? value.trim() : undefined,
+    z.string().min(32).optional(),
+  ),
 })
 
 export function env() {
